@@ -120,6 +120,7 @@ def define_subsequences(folders: "list[str]", fold):
     features = []
     labels = []
     scan_list = []
+    paz_list = []
     DWI_1, DWI_2, T2_1, T2_2, T1_1, T1_2 = ([] for i in range(6))   #_1 sta sempre per pre-NAC, _2 per post-NAC
     #sub_sequences = [DWI_1, DWI_2, T2_1, T2_2, T1_1, T1_2] #lista di liste
 
@@ -245,6 +246,7 @@ def define_subsequences(folders: "list[str]", fold):
             for i in range(len(slices)):
                 labels.append(label)            #la stessa label è ripetuta per il numero di fette considerate
                 scan_list.append(name_string)   #nella lista delle scansioni aggiungo "NAC_1" ecc ecc
+                paz_list.append(name_num)
 
         #adesso faccio check su quale modello sto considerando, perchè ci sono modelli che usano solo alcuni branch rispetto ad altri. Ricorda infatti che stiamo parlando
                 #di risonanze magnetiche MultiParametriche
@@ -291,9 +293,9 @@ def define_subsequences(folders: "list[str]", fold):
     ######################################    
     labels = np.array(labels, dtype=int)
     labels = torch.from_numpy(labels).to(torch.float32) #python uses Float64 in numpy -> Float32 is more efficient
-    print(labels.dtype)
-    print(lista_dei_tagli,labels, scan_list, extra_slices_per_side)
-    return features, labels, scan_list, extra_slices_per_side
+    #print(labels.dtype)
+    #print(lista_dei_tagli,labels, scan_list, extra_slices_per_side, paz_list)
+    return features, labels, scan_list, extra_slices_per_side, paz_list
 
 def class_balance(labels_array: np.array)->dict:
     """
@@ -315,12 +317,15 @@ def class_balance(labels_array: np.array)->dict:
 def define_DCE(T1_1, T1_2):
     new_patient = ""
     DCE_dict = {}
+    branches_list =["DWI","T2","DCE_peak","DCE_3TP"] #da togliere poi
 
     features = []
     labels = []
+
+    k = 4
     DCE_peak1, DCE_peak2, DCE_3TP1, DCE_3TP2 = ([] for i in range(4))
     sub_sequences = [DCE_peak1, DCE_peak2, DCE_3TP1, DCE_3TP2]
-    slices = (config.SLICES*2 + 1)
+    slices = (k*2 + 1) #config.SLICES
 
     for img in T1_1:
         patient = img.GetMetaData("0020|000d").strip()
@@ -340,7 +345,7 @@ def define_DCE(T1_1, T1_2):
 
     for patient in DCE_dict:
         patient_time = list(DCE_dict[patient])
-        patient_time = np.array(patient_time).astype(np.float)
+        patient_time = np.array(patient_time)#.astype(np.float)
         patient_time = np.sort(patient_time)
 
         DCE_pre = patient_time[0]
@@ -354,14 +359,15 @@ def define_DCE(T1_1, T1_2):
 
         for img in T1_1:
             patient_name = img.GetMetaData("0020|000d").strip()
-            time = float(img.GetMetaData("0008|0031").strip())
+            time = img.GetMetaData("0008|0031").strip()
 
-            if "DCE_peak" in config.branches_list:
+            if "DCE_peak" in branches_list:
                 if patient_name == patient and time == DCE_peak:
                     DCE_peak1.append(sitk.GetArrayFromImage(img).astype(np.float32))
 
-            if "DCE_3TP" in config.branches_list:
+            if "DCE_3TP" in branches_list:
                 if patient_name == patient:
+                    print(f"Tempo: {time}\n DCE_pre={DCE_pre}\nDCE_peak: {DCE_peak}")
                     if time == DCE_pre:
                         pre_array.append(sitk.GetArrayFromImage(img).astype(np.float32))
                         DCE_count += 1
@@ -373,7 +379,9 @@ def define_DCE(T1_1, T1_2):
                         DCE_count += 1
                     if DCE_count == slices*3:
                         for i in range(slices):
+                            print(i)
                             image_3TP = np.vstack((pre_array[i], peak_array[i], post_array[i])) #forse qua dstack
+                            print(f"L'immagine DCE 3TP ha dimensioni: {image_3TP.shape}")
                             DCE_3TP1.append(image_3TP)
 
     for img in T1_2:
@@ -394,7 +402,7 @@ def define_DCE(T1_1, T1_2):
 
     for patient in DCE_dict:
         patient_time = list(DCE_dict[patient])
-        patient_time = np.array(patient_time).astype(np.float)
+        patient_time = np.array(patient_time)#.astype(np.float)
         patient_time = np.sort(patient_time)
 
         DCE_pre = patient_time[0]
@@ -408,52 +416,147 @@ def define_DCE(T1_1, T1_2):
 
         for img in T1_2:
             patient_name = img.GetMetaData("0020|000d").strip()
-            time = float(img.GetMetaData("0008|0031").strip())
+            time = img.GetMetaData("0008|0031").strip()
 
-            if "DCE_peak" in config.branches_list:
+            if "DCE_peak" in branches_list:
                 if patient_name == patient and time == DCE_peak:
-                    DCE_peak2.append(sitk.GetArrayFromImage(img))
+                    DCE_peak2.append(sitk.GetArrayFromImage(img).astype(np.float32))
 
-            if "DCE_3TP" in config.branches_list:
+            if "DCE_3TP" in branches_list:
                 if patient_name == patient:
+                    print(f"Tempo: {time}\n DCE_pre={DCE_pre}\nDCE_peak: {DCE_peak}")
                     if time == DCE_pre:
-                        pre_array.append(sitk.GetArrayFromImage(img))
+                        pre_array.append(sitk.GetArrayFromImage(img).astype(np.float32))
                         DCE_count += 1
                     elif time == DCE_peak:
-                        peak_array.append(sitk.GetArrayFromImage(img))
+                        peak_array.append(sitk.GetArrayFromImage(img).astype(np.float32))
                         DCE_count += 1
                     else:
-                        post_array.append(sitk.GetArrayFromImage(img))
+                        post_array.append(sitk.GetArrayFromImage(img).astype(np.float32))
                         DCE_count += 1
                     if DCE_count == slices*3:
                         for i in range(slices):
                             image_3TP = np.vstack((pre_array[i], peak_array[i], post_array[i]))
+                            print(f"L'immagine DCE 3TP ha dimensioni: {image_3TP.shape}")
                             DCE_3TP2.append(image_3TP)
 
     for sub_sequence in sub_sequences:
         features.append(np.array(sub_sequence))
     return features
 
-def define_input(features, labels):
-    # branches_list =["DWI","T2","DCE_peak","DCE_3TP"] #new
-    # if "DCE_peak" or "DCE_3TP" in branches_list: #config.branches_list:
-    #     DCE_features = define_DCE(features[-2], features[-1])
-    #     features = features[:len(features)-2]
-    #     for DCE_feature in DCE_features:
-    #         features.append(DCE_feature)
-
+def define_input(patient_list, features, labels):
+    branches_list =["DWI","T2","DCE_peak","DCE_3TP"] #new
+    if "DCE_peak" or "DCE_3TP" in branches_list: #config.branches_list:
+        DCE_features = define_DCE(features[-2], features[-1])
+        features = features[:len(features)-2]
+        for DCE_feature in DCE_features:
+            features.append(DCE_feature)
+    X_patient = []
     X = []
-    for feature in features[:-2]:   #c'è poi da togliere il [:-2] perchè ora sto evitando le DCE
+
+    for feature in features: 
         feature = torch.tensor(feature)
         if feature.any():
             X_sub = feature
             if feature.shape[1] == 1:
                 X_sub = torch.repeat_interleave(X_sub,repeats = 3, dim=1)
             X_sub = X_sub.to(torch.float32) 
-            print(f"X_sub ha dimensioni: {X_sub.shape}") # [(num di slice * num pazienti), C, H, W]
-            X.append(X_sub)
+             # [(num di slice * num pazienti), C, H, W]
+            X.append(X_sub)          #indice X[tipo_risonanza][numero_di_immagine][channels][height][weight]
+    
+    current_patient=''
+    for feature in features:
+        subsequence=[]
+        for slice, patient in zip(feature,patient_list):
+            if patient!=current_patient:
+                current_patient=patient
+                subsequence.append(slice)
+
+
     Y = F.one_hot(labels.to(torch.int64), 2) #config.NB_CLASSES)
+    print(f"Shape of X: {len(X)} elements of shape {X[0].shape}, Of Y: {Y.shape}")
+                 #Y ha dimensioni "2" perchè la label ha subito one-hot-encoding
     return X, Y
+
+def rearrange_feature_list(features):
+    final_features_list = [ ]
+    positions=[(0,1),(2,3),(4,5),(6,7)]
+    for couple in positions:
+        print(f"Pair: {couple}")
+        pre_nac_list = features[couple[0]]
+        post_nac_list = features[couple[1]]
+
+        print(f"Lunghezza della pre_nac_list: {len(pre_nac_list)}")
+        print(f"Lunghezza della post_nac_list: {len(post_nac_list)}")
+
+        #prendi i primi 2k+1 da pre_nac e poi concatena i successivi 2k+1 da post_nac
+        pre_nac_shaded_list = []
+        for i in range(0,len(pre_nac_list), 2*k+1):
+            individual_patient=[]
+            for j in range(i,i+2*k+1):
+                individual_patient.append(pre_nac_list[j])
+                print(f"LEN INDIVIDUAL PATIENT: {len(individual_patient)}")
+            pre_nac_shaded_list.append(individual_patient)
+        print(f"PRE NAC shaded list ha lunghezza: {len(pre_nac_shaded_list)}")
+
+        post_nac_shaded_list = []
+        for i in range(0,len(post_nac_list), 2*k+1):
+            individual_patient=[]
+            for j in range(i,i+2*k+1):
+                individual_patient.append(post_nac_list[j])
+            post_nac_shaded_list.append(individual_patient)
+        print(len(post_nac_shaded_list))
+
+        if len(pre_nac_shaded_list)!=len(post_nac_shaded_list):
+            print("Le due liste non hanno la stessa lunghezza")
+            exit()
+        
+        modality_joined = []
+
+        print(f"Line 519 - {len(pre_nac_shaded_list)}")
+        print(f"Line 520 - {len(post_nac_shaded_list)}")
+        print(f"Il tipo è: {type(pre_nac_shaded_list)}")
+
+        for patient_idx in range(len(post_nac_shaded_list)):
+            print(f"Paziente: NAC_{patient_idx+1}")
+            pre_nac_shaded_list[patient_idx].extend(post_nac_shaded_list[patient_idx])
+            print(f"Lunghezza della lista di NAC_{patient_idx+1} post extend: {len(pre_nac_shaded_list[patient_idx])}")
+            print("")
+            modality_joined.append(pre_nac_shaded_list[patient_idx])
+
+        final_features_list.append(modality_joined)
+
+    print("Analisi delle dimensioni sulla final_features_list:")
+    print(f"Mi aspetto siano 4: {len(final_features_list)}")
+
+    print(f"La lista con tutte le features ha {len(final_features_list)} elementi. ")
+    for i in range(len(final_features_list)):
+        print(f"La modalità numero {i+1} ha {len(final_features_list[i])} liste, ovvero pazienti:")
+        for j in range(len(final_features_list[i])):
+            print(f"La sequenza {i+1} del paziente {j+1} ha {len(final_features_list[i][j])} slices.")
+        print("")
+    print("")
+
+    patient_stacked_list = []    
+    for patient_idx in range(len(final_features_list)):
+        list_modalities = []
+        for modality_idx in range(len(final_features_list[patient_idx])):
+            sequence_tensor_list = final_features_list[patient_idx][modality_idx]
+            list_modalities.append(torch.stack(sequence_tensor_list, dim=0))
+        patient_stacked_list.append(torch.stack(list_modalities, dim=0))
+    full_stacked = torch.stack(patient_stacked_list, dim=0)
+    full_stacked = full_stacked.transpose(0,1)
+    return full_stacked
+    
+    #---------------  Printing of shape infos:
+    print(f"Stackata la lista di tensori. Le dimensioni del nuovo tensore sono: {full_stacked.shape}")
+    print(f"A livello di paziente le dimensioni sono: {full_stacked[0].shape}.")
+    print(f"\t- {full_stacked[0].shape[0]} modalities;\n\t- {full_stacked[0].shape[1]} immagini;\n\t- {full_stacked[0].shape[2]}x{full_stacked[0].shape[3]}x{full_stacked[0].shape[4]};")
+    print(f"A livello di modalità le dimensioni sono: {full_stacked[0][0].shape}.")
+    print(f"\t- {full_stacked[0][0].shape[0]} immagini;\n\t- {full_stacked[0][0].shape[1]}x{full_stacked[0][0].shape[2]}x{full_stacked[0][0].shape[3]};")
+    print(f"A livello di singola immagine le dimensioni sono {full_stacked[0][0][0].shape}")
+    print(f"\t- {full_stacked[0][0][0].shape[0]}x{full_stacked[0][0][0].shape[1]}x{full_stacked[0][0][0].shape[2]};")
+
 
 if __name__ == "__main__":
     folder_list = retrieve_folders_list("C:\\Users\\c.navilli\\Desktop\\Prova\\dataset_mini")
@@ -464,12 +567,22 @@ if __name__ == "__main__":
 
     k=4
     maximal_subsequences_count = 0
+    print("1. Defining Subsequences")
+    features, labels, scan_list, extra_slices_per_side, patient_list = define_subsequences(folder_list,10)
+    print(f"\n{len(features)}")
+    print(f"FEATURES[4]: {features[4]}")
 
-    features, labels, scan_list, extra_slices_per_side = define_subsequences(folder_list,10)
-    #print(f"\n{len(features)}")
-    #print(features[4])
-    
-    define_input(features, labels)
+    summary_patients = []
+    for i in range(0,len(patient_list), 2*k+1):
+        summary_patients.append(patient_list[i])
+    print(f"Lista pazienti: {summary_patients}")
+
+    print("\n2. Defining inputs")
+    X,Y = define_input(patient_list, features, labels)
+ 
+    print("\n3. Rearrange inputs")
+    rearrange_feature_list(X)
+    #define_input(patient_list, features, labels)
     exit()
 
     for folder in folder_list:
@@ -480,3 +593,7 @@ if __name__ == "__main__":
     #print(f"\nPercentage of full sequences: {maximal_subsequences_count/len(folder_list):.2%}")
     #features,labels, scan_list, extra_slices_per_side = define_subsequences(folder_list,1)
         
+#lista di 8 elementi [(2k+1)*numpaz, 3,225,225)]
+# [num pazienti, [slices, canali, h, w] #DCE
+            #    [slices, canali, h, w] #T2
+            #    
