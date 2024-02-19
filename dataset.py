@@ -11,12 +11,12 @@ import logging
 
 class MRIDataset(Dataset):
 
-    def __init__(self, root_dir=None, transform = None):
+    def __init__(self, folders_list=None, transform = None):
         self.transform = transform
 
         print("1. Defining Subsequences")
-        folder_list = self._retrieve_folders_list("C:\\Users\\c.navilli\\Desktop\\Prova\\dataset_mini")
-        features, labels, scan_list, extra_slices_per_side, patient_list = self._define_subsequences(folder_list,10)
+        #folder_list = self._retrieve_folders_list("C:\\Users\\c.navilli\\Desktop\\Prova\\dataset_mini")
+        features, labels, scan_list, extra_slices_per_side, patient_list = self._define_subsequences(folders_list,10)
         
         print("\n2. Defining inputs")
         X,Y = self._define_input(patient_list, features, labels)

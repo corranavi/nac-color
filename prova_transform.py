@@ -37,7 +37,7 @@ transforms = T.Compose([
     T.RandomResizedCrop(size=(224, 224), antialias=True),
     T.RandomHorizontalFlip(p=0.5),
     T.ToDtype(torch.float32, scale=True),
-    T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    #T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 transformed_images = transforms(both_images)
 
