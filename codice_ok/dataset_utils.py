@@ -106,3 +106,48 @@ def Kfold_split(folders, k):
         Kfold_list.append(fold_list)
 
     return Kfold_list
+
+def apply_same_transformation_all_modalities(original_tensor: torch.Tensor, transform : object = None):
+    """
+    Take as input a tensor referring to a single patient (all modalities, pre and post nac, all slices)
+    and process slice by slice so that the same transformation is applied accross the different channels
+    (for example vertical flip).
+    Args:
+        original_tensor: the tensor referring to a single patient
+        transform: the torchvision transformation to be applied
+    Returns:
+        reconstructed_tensor: a tensor with the same dimension as the original, but with transformations applied.
+    """
+    num_modalities = original_tensor.shape[0]
+    num_slices = original_tensor.shape[1]
+
+    reconstructed_tensor = torch.Tensor()
+
+    for slice in range(num_slices):
+        slice_tensor = torch.Tensor()
+        for modality in range(num_modalities):
+            slice_tensor = torch.cat((slice_tensor, original_tensor[modality][slice].unsqueeze(0)))
+        print(f"Slice numero {slice+1}!")
+        print("")
+
+        #apply transformation
+        slice_tensor = transform(slice_tensor)
+
+        #Riassembla il tensore
+        print(f"Shape slice_tensor after transformation: {slice_tensor.shape}")
+
+        divided_modalities = torch.Tensor()
+        for i in range(num_modalities):
+            modality_i = slice_tensor[i].unsqueeze(0)#.unsqueeze(0) #ok
+            divided_modalities = torch.cat((divided_modalities, modality_i)) #ok
+        
+        #print(f"Modalità riassemblate: {modalita_separate}")
+        print(f"Shape after divided modalities: {divided_modalities.shape}")
+        reconstructed_tensor = torch.cat((reconstructed_tensor, divided_modalities.unsqueeze(0)))
+
+    print("\Original tensor has shape: ", original_tensor.shape)
+    reconstructed_tensor = torch.transpose(reconstructed_tensor, 0,1)
+    print("\nTransformed tensor has shape: ", reconstructed_tensor.shape)
+    assert original_tensor.shape == reconstructed_tensor.shape
+
+    return reconstructed_tensor

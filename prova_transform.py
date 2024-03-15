@@ -9,8 +9,8 @@ import numpy as np
 
 from transformations import TRANSFORMATIONS
 
-image = torch.randn((3,224,224))
-cloned = image.clone()
+image = torch.randn((3,224,224))  #creo 4 immagini randomiche 
+cloned = image.clone()              #queste sono 4 immagini pari pari le 4 randomiche
 print((image.unsqueeze(0)).shape) #(1,3,15,15)
 
 # image = Image.open("C:\\Users\\c.navilli\\Pictures\\bimbo_piange.png")
@@ -66,3 +66,5 @@ print(torch.all(image_tx == cloned_tx).item())
 
 #Ok tutto funziona ---> la trasformazione viene applicata in modo uguale a tutte le slice della
 #sottosequenza
+
+#TODO Da provare se, qualora avessi sequenze parallele (es MRI_1, MRI_2), queste vengono applicate uguali

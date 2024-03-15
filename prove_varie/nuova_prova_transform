@@ -1,0 +1,26 @@
+import torch
+from torchvision.transforms import v2 as T
+from PIL import Image
+import matplotlib.pyplot as plt
+import numpy as np
+
+original_tensor = torch.randn((3,512,512))
+image = Image.open("C:\\Users\\c.navilli\\Pictures\\deig7q3-c304245f-0428-4b81-b9ae-7c9ae66189d6.png")
+prima_trasf = T.Compose([T.ToTensor()])
+image = prima_trasf(image)
+image = image[:3]
+print(image.shape)
+resize = int(1080*1),int(1824*1)
+transforms = T.Compose([
+    T.RandomResizedCrop(size=(1080, 1824), scale=(0.3,1), antialias=True),
+    T.RandomHorizontalFlip(p=1),
+    #T.ToDtype(torch.float32, scale=True),
+    #T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+])
+transofrmed = transforms(image)
+
+plt.imshow(image.view(image.shape[1], image.shape[2], image.shape[0]))
+plt.show()
+
+plt.imshow(transofrmed.view(transofrmed.shape[1], transofrmed.shape[2], transofrmed.shape[0]))
+plt.show()

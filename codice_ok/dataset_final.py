@@ -7,6 +7,8 @@ import torch
 from torch.nn import functional as F
 from torch.utils.data import Dataset
 
+from utils.dataset_utils import normalize_slice_channelwise, apply_same_transformation_all_modalities
+
 import logging
 
 class MRIDataset(Dataset):
@@ -14,21 +16,19 @@ class MRIDataset(Dataset):
     def __init__(self, folders_list=None, transform = None):
         self.transform = transform
 
-        print("1. Defining Subsequences")
+        print("1. DEFINING SUBSEQUENCES")
         features, labels, scan_list, extra_slices_per_side, patient_list = self._define_subsequences(folders_list)
         
-        print("\n2. Defining inputs")
+        print("\n2. DEFINING INPUTS")
         X,Y = self._define_input(patient_list, features, labels)
 
-        print("\n3. Rearrange inputs")
-        X = self._new_rearrange_feature_list(X, extra_slices_per_side)
+        print("\n3. REARRANGE INPUTS")
+        X,Y = self._new_rearrange_feature_list(X,Y, extra_slices_per_side)
         #Y = self._rearrange_labels_list(Y, extra_slices_per_side)
         
         self.patients = self._rearrange_patients_list(patient_list, extra_slices_per_side)
-        self.patient_sequences_lists = X
-        #self.images =  #torch.Tensor() #qua devo far rientrare tutte le immagini
-        #self.names = ["Corrado", "Federico","Mattia","Ugo","Silvana"]
-        #self.labels = ['1','1','1','1','0'] #torch.Tensor() #qua vedo tutta la lista delle immagini
+        self.patient_sequences = X
+        self.labels = Y
         
     def __getitem__(self, index) -> (torch.Tensor):#, torch.Tensor):
         """
@@ -39,18 +39,21 @@ class MRIDataset(Dataset):
             img(torch.Tensor): a tensor containing a 3D tensor for each branch of the model.
             label(torch.Tensor): a tensor containing a 1D tensor for each branch of the model.
         """
-        #img = self.images[:][index]
-        patient_sequences = self.patient_sequences_lists[index]
+
+        patient_sequences = self.patient_sequences[index]
         patient = self.patients[index]
+        patient_labels = self.labels[index]
+
         if self.transform is not None:
-            patient_sequences = self.transform(patient_sequences)      #la trasformazione in quel caso va applicata a tutte le immagini della stessa sequenza
-        return patient, patient_sequences
+            patient_sequences = apply_same_transformation_all_modalities(patient_sequences, self.transform)
+            
+        return patient, patient_sequences, patient_labels
     
     def __len__(self):
         """
         Return the length of the dataset, i.e. the number of slices.
         """
-        return self.patient_sequences_lists.shape[0]
+        return self.patient_sequences.shape[0]
     
     def _retrieve_folders_list(self, root_dir:str) -> "list[str]":
         """
@@ -117,7 +120,6 @@ class MRIDataset(Dataset):
                 for file in f:
                     if '.dcm' in file or '.IMA' in file:
                         dicom_files.append(os.path.abspath(os.path.join(r,file)))
-            print("\n",dicom_files[0],end="") 
                         
             reader = sitk.ImageFileReader()
             reader.SetFileName(dicom_files[0])
@@ -154,7 +156,6 @@ class MRIDataset(Dataset):
                         index_count += 1
                         image_count += 1
                         index_instance = int(img.GetMetaData('0020|0013'))
-                        print(index_instance)
 
                         upper_bound = min(max_instance, (index_instance + extra_slices_per_side))
                         lower_bound = max(min_instance, (index_instance - extra_slices_per_side))
@@ -172,7 +173,6 @@ class MRIDataset(Dataset):
                     img_instance = int(img.GetMetaData('0020|0013'))
                     if img_instance >= index_instance and img_instance <= upper_bound:
                         image_count += 1
-                        print(f"Presa {img_instance}")
                         if scan_string != "DCE":   
                             float_slice = sitk.GetArrayFromImage(img)
                             slices.append(float_slice.astype(np.float32))
@@ -181,7 +181,6 @@ class MRIDataset(Dataset):
 
                     if img_instance < index_instance and img_instance >= lower_bound:
                         image_count += 1
-                        print(f"Presa {img_instance}")
                         if scan_string != "DCE":
                             float_slice = sitk.GetArrayFromImage(img)
                             slices.append(float_slice.astype(np.float32))
@@ -239,6 +238,14 @@ class MRIDataset(Dataset):
         print(labels.dtype)
         print(lista_dei_tagli,labels, scan_list, extra_slices_per_side)
         return features, labels, scan_list, extra_slices_per_side, paz_list           #scan_list = NAC_1, NAC_1,....per ogni foto
+    
+    def _normalize_slice(self, slice: torch.Tensor)->torch.Tensor:
+        # TODO: Implementare il flusso per rimuovere da ogni slice la mean e std per canale
+        #mean = calcola_la_media
+        #std = calcola_la_std
+        #slice = T.Normalize(mean = mean, std = std)(slice)
+
+        return slice
 
     def _class_balance(self, labels_array: np.array)->dict:
         """
@@ -311,7 +318,6 @@ class MRIDataset(Dataset):
 
                 if "DCE_3TP" in branches_list:
                     if patient_name == patient:
-                        print(f"Tempo: {time}\n DCE_pre={DCE_pre}\nDCE_peak: {DCE_peak}")
                         if time == DCE_pre:
                             pre_array.append(sitk.GetArrayFromImage(img).astype(np.float32))
                             DCE_count += 1
@@ -323,9 +329,7 @@ class MRIDataset(Dataset):
                             DCE_count += 1
                         if DCE_count == slices*3:
                             for i in range(slices):
-                                print(i)
                                 image_3TP = np.vstack((pre_array[i], peak_array[i], post_array[i]))
-                                print(f"L'immagine DCE 3TP ha dimensioni: {image_3TP.shape}")
                                 DCE_3TP1.append(image_3TP)
 
         for img in T1_2:
@@ -368,7 +372,6 @@ class MRIDataset(Dataset):
 
                 if "DCE_3TP" in branches_list:
                     if patient_name == patient:
-                        print(f"Tempo: {time}\n DCE_pre={DCE_pre}\nDCE_peak: {DCE_peak}")
                         if time == DCE_pre:
                             pre_array.append(sitk.GetArrayFromImage(img).astype(np.float32))
                             DCE_count += 1
@@ -381,7 +384,6 @@ class MRIDataset(Dataset):
                         if DCE_count == slices*3:
                             for i in range(slices):
                                 image_3TP = np.vstack((pre_array[i], peak_array[i], post_array[i]))
-                                print(f"L'immagine DCE 3TP ha dimensioni: {image_3TP.shape}")
                                 DCE_3TP2.append(image_3TP)
 
         for sub_sequence in sub_sequences:
@@ -396,20 +398,115 @@ class MRIDataset(Dataset):
             for DCE_feature in DCE_features:
                 features.append(DCE_feature)
 
-        X = []
+        X = torch.Tensor()
         for feature in features: 
             feature = torch.tensor(feature)
             if feature.any():
                 X_sub = feature
                 if feature.shape[1] == 1:
                     X_sub = torch.repeat_interleave(X_sub,repeats = 3, dim=1)
-                X_sub = X_sub.to(torch.float32) 
-                X.append(X_sub)          #indice X[tipo_risonanza][numero_di_immagine][channels][height][weight]
+                X_sub = X_sub.to(torch.float32).unsqueeze(0) 
+
+                print(f"SHAPE {X_sub.shape}")
+                #NEW normalizzazione -----------------------------------------
+                X_sub_normalized = torch.Tensor()
+                for slice in range(X_sub.shape[1]):
+                    slice = normalize_slice_channelwise(X_sub[0][slice])
+                    X_sub_normalized = torch.cat([X_sub_normalized, slice.unsqueeze(0)])
+                
+                X_sub_normalized = X_sub_normalized.unsqueeze(0)
+                #X_sub = normalize_slice_channelwise(X_sub)
+                #-------------------------------------------------------------
+
+                print(f"X_sub ha dimensioni: {X_sub_normalized.shape}")
+                X = torch.cat([X, X_sub_normalized], dim = 0)
+                #X.append(X_sub)          #indice X[tipo_risonanza][numero_di_immagine][channels][height][weight]
         Y = F.one_hot(labels.to(torch.int64), 2) #config.NB_CLASSES)
-        print(f"Shape of X: {len(X)} elements of shape {X[0].shape}, Of Y: {Y.shape}")
+        print(Y)
+        print(f"Y shape: {Y.shape}")
+        print(f"X shape: {X.shape}")
         return X, Y
 
-    def _rearrange_feature_list(self, features: "list[list[torch.Tensor]]", k:int)->torch.Tensor:
+    # def _rearrange_feature_list(self, features: "list[list[torch.Tensor]]", k:int)->torch.Tensor:
+    #     """
+    #     Given the previously extracted list of features, rearrange them so that the output is 
+    #     a Torch Tensor whose first dimension is the one of the patients.
+    #     Arguments:
+    #         features (list[list[torch.Tensor]]): the list of processed images.
+    #         k (int): the number of additional slices per side.
+    #     Returns:
+    #         full_stakced (torch.Tensor): a tensor of dimension [#patients x #modalities x #images x #channels x #height_pixels x #weight_pixels]
+    #     """
+    #     final_features_list = [ ]
+    #     positions=[(0,1),(2,3),(4,5),(6,7)]
+    #     for couple in positions:
+    #         print(f"Pair: {couple}")
+    #         pre_nac_list = features[couple[0]]
+    #         post_nac_list = features[couple[1]]
+
+    #         print(f"Lunghezza della pre_nac_list: {len(pre_nac_list)}")
+    #         print(f"Lunghezza della post_nac_list: {len(post_nac_list)}")
+
+    #         #prendi i primi 2k+1 da pre_nac e poi concatena i successivi 2k+1 da post_nac
+    #         pre_nac_shaded_list = []
+    #         for i in range(0,len(pre_nac_list), 2*k+1):
+    #             individual_patient=[]
+    #             for j in range(i,i+2*k+1):
+    #                 individual_patient.append(pre_nac_list[j])
+    #                 print(f"LEN INDIVIDUAL PATIENT: {len(individual_patient)}")
+    #             pre_nac_shaded_list.append(individual_patient)
+    #         print(f"PRE NAC shaded list ha lunghezza: {len(pre_nac_shaded_list)}")
+
+    #         post_nac_shaded_list = []
+    #         for i in range(0,len(post_nac_list), 2*k+1):
+    #             individual_patient=[]
+    #             for j in range(i,i+2*k+1):
+    #                 individual_patient.append(post_nac_list[j])
+    #             post_nac_shaded_list.append(individual_patient)
+    #         print(len(post_nac_shaded_list))
+
+    #         if len(pre_nac_shaded_list)!=len(post_nac_shaded_list):
+    #             print("Le due liste non hanno la stessa lunghezza")
+    #             exit()
+            
+    #         modality_joined = []
+
+    #         print(f"Line 519 - {len(pre_nac_shaded_list)}")
+    #         print(f"Line 520 - {len(post_nac_shaded_list)}")
+    #         print(f"Il tipo è: {type(pre_nac_shaded_list)}")
+
+    #         for patient_idx in range(len(post_nac_shaded_list)):
+    #             print(f"Paziente: NAC_{patient_idx+1}")
+    #             pre_nac_shaded_list[patient_idx].extend(post_nac_shaded_list[patient_idx])
+    #             print(f"Lunghezza della lista di NAC_{patient_idx+1} post extend: {len(pre_nac_shaded_list[patient_idx])}")
+    #             print("")
+    #             modality_joined.append(pre_nac_shaded_list[patient_idx])
+
+    #         final_features_list.append(modality_joined)
+
+    #     print("Analisi delle dimensioni sulla final_features_list:")
+    #     print(f"Mi aspetto siano 4: {len(final_features_list)}")
+
+    #     print(f"La lista con tutte le features ha {len(final_features_list)} elementi. ")
+    #     for i in range(len(final_features_list)):
+    #         print(f"La modalità numero {i+1} ha {len(final_features_list[i])} liste, ovvero pazienti:")
+    #         for j in range(len(final_features_list[i])):
+    #             print(f"La sequenza {i+1} del paziente {j+1} ha {len(final_features_list[i][j])} slices.")
+    #         print("")
+    #     print("")
+
+    #     patient_stacked_list = []    
+    #     for patient_idx in range(len(final_features_list)):
+    #         list_modalities = []
+    #         for modality_idx in range(len(final_features_list[patient_idx])):
+    #             sequence_tensor_list = final_features_list[patient_idx][modality_idx]
+    #             list_modalities.append(torch.stack(sequence_tensor_list, dim=0))
+    #         patient_stacked_list.append(torch.stack(list_modalities, dim=0))
+    #     full_stacked = torch.stack(patient_stacked_list, dim=0)
+    #     full_stacked = full_stacked.transpose(0,1)
+    #     return full_stacked
+
+    def _new_rearrange_feature_list(self, X: "list[list[torch.Tensor]]", Y,  k:int)->torch.Tensor:
         """
         Given the previously extracted list of features, rearrange them so that the output is 
         a Torch Tensor whose first dimension is the one of the patients.
@@ -419,130 +516,43 @@ class MRIDataset(Dataset):
         Returns:
             full_stakced (torch.Tensor): a tensor of dimension [#patients x #modalities x #images x #channels x #height_pixels x #weight_pixels]
         """
+        print(f"La features list ha dimensioni {X.shape}")
         final_features_list = [ ]
         positions=[(0,1),(2,3),(4,5),(6,7)]
-        for couple in positions:
+        for modality_num, couple in enumerate(positions):
             print(f"Pair: {couple}")
-            pre_nac_list = features[couple[0]]
-            post_nac_list = features[couple[1]]
+            pre_nac_list = X[couple[0]]
+            post_nac_list = X[couple[1]]
 
             print(f"Lunghezza della pre_nac_list: {len(pre_nac_list)}")
             print(f"Lunghezza della post_nac_list: {len(post_nac_list)}")
 
-            #prendi i primi 2k+1 da pre_nac e poi concatena i successivi 2k+1 da post_nac
+            # Devo splittare la lista con tutte le sequenze per paziente
             pre_nac_shaded_list = []
             for i in range(0,len(pre_nac_list), 2*k+1):
-                individual_patient=[]
+                print(f"Processing {len(pre_nac_shaded_list)+1}° patient of the list.")
+                subsequence_for_patient=[]
                 for j in range(i,i+2*k+1):
-                    individual_patient.append(pre_nac_list[j])
-                    print(f"LEN INDIVIDUAL PATIENT: {len(individual_patient)}")
-                pre_nac_shaded_list.append(individual_patient)
-            print(f"PRE NAC shaded list ha lunghezza: {len(pre_nac_shaded_list)}")
+                    subsequence_for_patient.append(pre_nac_list[j])
+                print(f"Numero di slice per modalità {modality_num + 1}, PRE nac: {len(subsequence_for_patient)}")
+                pre_nac_shaded_list.append(subsequence_for_patient)
+            print(f"PRE NAC shaded list ha lunghezza: {len(pre_nac_shaded_list)}\n")
 
             post_nac_shaded_list = []
             for i in range(0,len(post_nac_list), 2*k+1):
-                individual_patient=[]
+                print(f"Processing {len(post_nac_shaded_list)+1}° patient of the list.")
+                subsequence_for_patient=[]
                 for j in range(i,i+2*k+1):
-                    individual_patient.append(post_nac_list[j])
-                post_nac_shaded_list.append(individual_patient)
-            print(len(post_nac_shaded_list))
+                    subsequence_for_patient.append(post_nac_list[j])
+                print(f"Numero di slice per modalità {modality_num + 1}, POST nac: {len(subsequence_for_patient)}")
+                post_nac_shaded_list.append(subsequence_for_patient)
+            print(f"POST NAC shaded list ha lunghezza: {len(post_nac_shaded_list)}")
 
             if len(pre_nac_shaded_list)!=len(post_nac_shaded_list):
                 print("Le due liste non hanno la stessa lunghezza")
                 exit()
-            
-            modality_joined = []
 
-            print(f"Line 519 - {len(pre_nac_shaded_list)}")
-            print(f"Line 520 - {len(post_nac_shaded_list)}")
-            print(f"Il tipo è: {type(pre_nac_shaded_list)}")
-
-            for patient_idx in range(len(post_nac_shaded_list)):
-                print(f"Paziente: NAC_{patient_idx+1}")
-                pre_nac_shaded_list[patient_idx].extend(post_nac_shaded_list[patient_idx])
-                print(f"Lunghezza della lista di NAC_{patient_idx+1} post extend: {len(pre_nac_shaded_list[patient_idx])}")
-                print("")
-                modality_joined.append(pre_nac_shaded_list[patient_idx])
-
-            final_features_list.append(modality_joined)
-
-        print("Analisi delle dimensioni sulla final_features_list:")
-        print(f"Mi aspetto siano 4: {len(final_features_list)}")
-
-        print(f"La lista con tutte le features ha {len(final_features_list)} elementi. ")
-        for i in range(len(final_features_list)):
-            print(f"La modalità numero {i+1} ha {len(final_features_list[i])} liste, ovvero pazienti:")
-            for j in range(len(final_features_list[i])):
-                print(f"La sequenza {i+1} del paziente {j+1} ha {len(final_features_list[i][j])} slices.")
-            print("")
-        print("")
-
-        patient_stacked_list = []    
-        for patient_idx in range(len(final_features_list)):
-            list_modalities = []
-            for modality_idx in range(len(final_features_list[patient_idx])):
-                sequence_tensor_list = final_features_list[patient_idx][modality_idx]
-                list_modalities.append(torch.stack(sequence_tensor_list, dim=0))
-            patient_stacked_list.append(torch.stack(list_modalities, dim=0))
-        full_stacked = torch.stack(patient_stacked_list, dim=0)
-        full_stacked = full_stacked.transpose(0,1)
-        return full_stacked
-
-    def _new_rearrange_feature_list(self, features: "list[list[torch.Tensor]]", k:int)->torch.Tensor:
-        """
-        Given the previously extracted list of features, rearrange them so that the output is 
-        a Torch Tensor whose first dimension is the one of the patients.
-        Arguments:
-            features (list[list[torch.Tensor]]): the list of processed images.
-            k (int): the number of additional slices per side.
-        Returns:
-            full_stakced (torch.Tensor): a tensor of dimension [#patients x #modalities x #images x #channels x #height_pixels x #weight_pixels]
-        """
-        final_features_list = [ ]
-        positions=[(0,1),(2,3),(4,5),(6,7)]
-        for couple in positions:
-            print(f"Pair: {couple}")
-            pre_nac_list = features[couple[0]]
-            post_nac_list = features[couple[1]]
-
-            print(f"Lunghezza della pre_nac_list: {len(pre_nac_list)}")
-            print(f"Lunghezza della post_nac_list: {len(post_nac_list)}")
-
-            #prendi i primi 2k+1 da pre_nac e poi concatena i successivi 2k+1 da post_nac
-            pre_nac_shaded_list = []
-            for i in range(0,len(pre_nac_list), 2*k+1):
-                individual_patient=[]
-                for j in range(i,i+2*k+1):
-                    individual_patient.append(pre_nac_list[j])
-                    print(f"LEN INDIVIDUAL PATIENT: {len(individual_patient)}")
-                pre_nac_shaded_list.append(individual_patient)
-            print(f"PRE NAC shaded list ha lunghezza: {len(pre_nac_shaded_list)}")
-
-            post_nac_shaded_list = []
-            for i in range(0,len(post_nac_list), 2*k+1):
-                individual_patient=[]
-                for j in range(i,i+2*k+1):
-                    individual_patient.append(post_nac_list[j])
-                post_nac_shaded_list.append(individual_patient)
-            print(len(post_nac_shaded_list))
-
-            if len(pre_nac_shaded_list)!=len(post_nac_shaded_list):
-                print("Le due liste non hanno la stessa lunghezza")
-                exit()
-            
-            modality_joined = []
-
-            print(f"Line 519 - {len(pre_nac_shaded_list)}")
-            print(f"Line 520 - {len(post_nac_shaded_list)}")
-            print(f"Il tipo è: {type(pre_nac_shaded_list)}")
-
-            # for patient_idx in range(len(post_nac_shaded_list)):
-            #     print(f"Paziente: NAC_{patient_idx+1}")
-            #     pre_nac_shaded_list[patient_idx].extend(post_nac_shaded_list[patient_idx])
-            #     print(f"Lunghezza della lista di NAC_{patient_idx+1} post extend: {len(pre_nac_shaded_list[patient_idx])}")
-            #     print("")
-            #     modality_joined.append(pre_nac_shaded_list[patient_idx])
-            # No - > non voglio estendere pre_nac con post_nac, devono essere due tensori diversi
+            print(f"Il tipo è: {type(pre_nac_shaded_list)}\n")
 
             final_features_list.append(pre_nac_shaded_list)
             final_features_list.append(post_nac_shaded_list)
@@ -556,7 +566,6 @@ class MRIDataset(Dataset):
             for j in range(len(final_features_list[i])):
                 print(f"La sequenza {i+1} del paziente {j+1} ha {len(final_features_list[i][j])} slices.")
             print("")
-        print("")
 
         patient_stacked_list = []    
         for patient_idx in range(len(final_features_list)):
@@ -567,7 +576,20 @@ class MRIDataset(Dataset):
             patient_stacked_list.append(torch.stack(list_modalities, dim=0))
         full_stacked = torch.stack(patient_stacked_list, dim=0)
         full_stacked = full_stacked.transpose(0,1)
-        return full_stacked
+        print(f"Il nuovo tensore X ha dimensioni: {full_stacked.shape}\n")
+
+        # Sharding delle Y 
+        Y_shaded_list = torch.Tensor()
+        for i in range(0,Y.shape[0], 2*k+1):
+            print(f"Processing {Y_shaded_list.shape[0] +1}° patient of the list.")
+            subsequence_for_patient = torch.Tensor()
+            for j in range(i,i+2*k+1):
+                subsequence_for_patient = torch.cat((subsequence_for_patient,Y[j].unsqueeze(0)), dim = 0)
+            print(f"Numero di labels per paziente: {subsequence_for_patient.shape[0]}")
+            Y_shaded_list = torch.cat((Y_shaded_list, subsequence_for_patient.unsqueeze(0)), dim = 0)
+        print(f"Il nuovo tensore Y ha dimensioni: {Y_shaded_list.shape}\n")
+
+        return full_stacked, Y_shaded_list
     
     def _rearrange_patients_list(self, patient_list, k):
         shortened_patients_list = []

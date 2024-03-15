@@ -133,7 +133,7 @@ def define_model():
 
     conc_features = tf.keras.layers.concatenate(res_list, name='conc_all')
     drop = tf.keras.layers.Dropout(dropout)(conc_features)
-    dense = tf.keras.layers.Dense(FC, activation='relu')(drop)
+    dense = tf.keras.layers.Dense(FC, activation='relu')(drop)  #FC = 128
 
     pCR_pred = tf.keras.layers.Dense(2, activation='softmax', name="pCR")(dense)
     output_list.append(pCR_pred)
