@@ -52,18 +52,6 @@ def normalize_slices(t1: torch.Tensor)-> torch.Tensor:
       X = torch.cat((X, slice_normalized.unsqueeze(0)))
     return X
 
-# def normalize_slices(slices_tensor: torch.Tensor)-> torch.Tensor:
-#     """
-#     This method apply normalization to a tensor of slices.
-#     """
-#     normalized_slices_tensor = torch.Tensor()
-#     for modality in range(slices_tensor.shape[0]):
-#         print(f"Slices modality shape: {slices_tensor[modality].shape}")
-#         print(slices_tensor[modality])
-#         slice_normalized = normalize_slice_channelwise(slices_tensor[modality])
-#         normalized_slices_tensor = torch.cat((normalized_slices_tensor, slice_normalized.unsqueeze(0)))
-#     return normalized_slices_tensor
-
 def get_patient_level(Y_test: torch.Tensor, Y_prob: torch.Tensor, slices: int):
     """
     

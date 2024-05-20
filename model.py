@@ -1,9 +1,9 @@
 import torch
-import pytorch_lightning as pl
+import lightning.pytorch as pl
 import torchmetrics
 import torchvision
 
-from pytorch_lightning import loggers as pl_loggers
+#from pytorch_lightning import loggers as pl_loggers
 import logging
 import wandb
 
@@ -64,19 +64,25 @@ class LightningModel(pl.LightningModule):
             weight_decay=self.wd,
             momentum=0.9
         )
-        scheduler = get_LR_scheduler(optimizer) #lo puoi passare solo se c'è un moniotrer del lr
-        return optimizer # {"optimizer": optimizer, "lr_scheduler": scheduler}
+        scheduler = get_LR_scheduler(optimizer) 
+        optimizer_dict = {"optimizer": optimizer, 
+                "lr_scheduler": {
+                    "scheduler": scheduler,
+                    "monitor": "val_loss"
+                    } 
+                }
+        return optimizer_dict
     
     def loss_function(self, probs, labels, weights):
         loss = self.loss_fn(probs, labels, self.secondary_weight, type='bce', weights=weights)
         return loss
     
     def _common_step(self, batch, batch_idx, train=False):
-        if train:
-            weights = self.weights.to(self.device)
-        else:
-            weights = None
-        #weights = self.weights.to(self.device) #use always the weight computed on the training
+        # if train:
+        #     weights = self.weights.to(self.device)
+        # else:
+        #     weights = None
+        weights = self.weights.to(self.device) #use always the weight computed on the training
         images, labels = batch
         images = images.permute(dims=(1,0, *range(2, images.dim()))).to(self.device)
         labels = labels.squeeze(dim=1).to(self.device)

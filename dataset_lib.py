@@ -2,14 +2,14 @@ import os
 import ast
 import SimpleITK as sitk
 import numpy as np
-from pytorch_lightning.utilities.types import TRAIN_DATALOADERS
+from lightning.pytorch.utilities.types import TRAIN_DATALOADERS
 import torch 
 
 from torch.nn import functional as F
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from torchvision.transforms import v2 as T
-import pytorch_lightning as pl
+import lightning.pytorch as pl
 
 from utils.dataset_utils import get_transformations, normalize_slice_channelwise, normalize_slices
 
@@ -447,7 +447,7 @@ class MRIDataset(Dataset):
                 X_sub = X_sub.to(torch.float32).unsqueeze(0) 
 
                 # print(f"\tShape pre normalization: {X_sub.shape}")
-                #NEW normalizzazione ----------------------------------------- 
+                #normalizzazione preventiva ----------------------------------------- #TODO valutare come cambiare questo step 
                 X_sub_normalized = torch.Tensor()
                 for slice in range(X_sub.shape[1]):
                     slice = normalize_slice_channelwise(X_sub[0][slice])
@@ -460,13 +460,8 @@ class MRIDataset(Dataset):
                 X = torch.cat([X, X_sub_normalized], dim = 0)
                 #X = torch.cat([X, X_sub], dim = 0)
                 print(f"Shape check - line 459 in define_input: {X.shape}")
-            
-            #TODO debugging sulla DCE_3TP
-            if i == 6:
-                print(f"Mean di tutte le slice DCE_3TP: {torch.mean(feature)}\nSTD di tutte le slice DCE_3TP: {torch.std(feature)}")
 
         Y = F.one_hot(labels.to(torch.int64), 2) #config.NB_CLASSES)
-        #print(Y)
 
         print(f"X shape: {X.shape}")
         print(f"Y shape: {Y.shape}")

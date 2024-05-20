@@ -3,11 +3,11 @@ import wandb
 import os
 import torch
 import numpy as np
-import pytorch_lightning as pl
-from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
+import lightning.pytorch as pl
+from lightning.pytorch.loggers import TensorBoardLogger, WandbLogger
 
 from utils.configurazioni import parse_arguments
-from utils.callbacks_utils import get_callbacks #get_LR_scheduler
+from utils.callbacks_utils import get_callbacks
 from utils.train_utils import retrieve_folders_list, Kfold_split, print_results
 from model import LightningModel
 from dataset_lib import MRIDataModule
@@ -48,7 +48,7 @@ if __name__ =="__main__":
         print(f"CLASS WEIGHTS: {dm.class_weights}")
         model = LightningModel(args.slices, args.fc, args.dropout, args.exp_name, args.optim, args.learning_rate, args.l2_reg, args.secondary_weight, dm.class_weights, folder_time, i)
 
-        cb_list = get_callbacks()
+        cb_list = get_callbacks(checkpoint = True, earlystop = True, lr_monitor = True)
 
         #Istantiate a trainer 
         trainer = pl.Trainer(
@@ -60,14 +60,18 @@ if __name__ =="__main__":
             min_epochs=1,
             max_epochs=args.epochs,
             check_val_every_n_epoch=1,
-            callbacks=None, #[cb_list],  c'è problema con i callbacks e sembra che sia collegato alla libreria
+            callbacks=cb_list, 
             reload_dataloaders_every_n_epochs=1
         )
 
         print(f"LR: {args.learning_rate}, WD: {args.l2_reg}")
         trainer.fit(model=model, datamodule=dm)
         trainer.validate(model=model, datamodule=dm)
-        trainer.test(model=model, datamodule=dm)
+        
+        ckpt_best = cb_list[0].best_model_path
+        print(f"Best checkpoint path: {ckpt_best}")
+
+        trainer.test(model=model, datamodule=dm, ckpt_path=ckpt_best)
         wandb.finish()
 
         print(f"Linea 66")

@@ -1,4 +1,4 @@
-from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
+from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 checkpoint_filepath=""
@@ -21,7 +21,7 @@ def get_callbacks(checkpoint: bool = True, earlystop: bool = True, lr_monitor: b
             filename = checkpoint_filepath,
             monitor='val_loss',
             save_weights_only=True,
-            save_top_k=1, #sarà come save_best_only?
+            save_top_k=1,
             verbose=True
         )
         cb_list.append(checkpoint_cb)
@@ -41,6 +41,7 @@ def get_callbacks(checkpoint: bool = True, earlystop: bool = True, lr_monitor: b
         )
         cb_list.append(learningrate_cb)
 
+    print(cb_list)
     return cb_list
 
 def get_LR_scheduler(optimizer):

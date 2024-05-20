@@ -12,7 +12,11 @@ from typing import Dict
 #   '--dropout', type=float, default=0.5, required=False, help='Dropout rate'
 #   '--fc', type=int, default=128, required=False, help='Size of last FC layer'
 
-class MultiParametricMRIModel(nn.Module):
+#NEW
+import lightning.pytorch as pl
+
+
+class MultiParametricMRIModel(pl.LightningModule): #(nn.Module):
 
     def __init__(self, FC, dropout):
         """
@@ -59,7 +63,7 @@ class MultiParametricMRIModel(nn.Module):
         return probs
 
 
-class BranchModel(nn.Module):
+class BranchModel(pl.LightningModule): #(nn.Module):
 
     def __init__(self):
         """
