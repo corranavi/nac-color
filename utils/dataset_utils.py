@@ -27,6 +27,26 @@ def get_transformations(choice: int = 1) -> "torchvision.transforms":
         transforms = None
     return transforms
 
+def get_transformations_COPY():
+    transforms = T.Compose([
+            T.RandomResizedCrop(size=(224, 224), scale=(1,1), antialias=True), #interpolation=InterpolationMode.NEAREST,
+            T.RandomHorizontalFlip( p = 0.5),
+            T.ColorJitter( brightness = (0.5 , 3)),
+            T.RandomAffine(
+                degrees = 0,
+                scale =(0.7, 1.3),
+                shear = 0.3
+            ),
+            T.ToTensor()
+        ])
+    return transforms
+
+def get_val_transformations():
+    transforms = T.Compose([
+            T.ToTensor()
+        ])
+    return transforms
+
 def normalize_slice_channelwise(slice: torch.Tensor)-> torch.Tensor:
     """
     Apply normalization to a single 3-channels image.

@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import v2 as T
 import lightning.pytorch as pl
 
-from utils.dataset_utils import get_transformations_COPY, get_val_transformations, normalize_slice_channelwise, normalize_slices
+from utils.dataset_utils import get_transformations, normalize_slice_channelwise, normalize_slices
 
 import logging
 
@@ -20,13 +20,12 @@ scans = ["DWI","T2","DCE"]
 
 class MRIDataset(Dataset):
 
-    def __init__(self, folders_list=None, slices = 3, transform = None, preprocess_type = ""):
+    def __init__(self, folders_list=None, slices = 3, transform = None):
         
         self.extra_slices_num = slices
         self.branches_list = branches_list
         self.scans = scans
         self.transform = transform
-        self.preprocess_type = preprocess_type
 
         print("1. DEFINING SUBSEQUENCES")
         features, labels, scan_list, extra_slices_per_side, patient_list = self._define_subsequences(folders_list)
@@ -56,9 +55,18 @@ class MRIDataset(Dataset):
 
         if index==0 or index==2:
             print(images)
+        # #normalization is performed in all cases -------------------------------------------
+        # print(f"SLICE ha shape [8,3,224,224]? {images.shape}")                             #-
+        # std,mean = torch.std_mean(images, dim=(-2,-1))                                     #-
+        # normalization = T.Compose([                                                       #-
+        #     T.Normalize(mean=mean, std=std)                                               #-
+        # ])                                                                                #-
+        # images = normalization(images) #------------------------------------------------------
 
         if self.transform is not None:
-            images = self.transform(images) 
+            images = self.transform(images)
+            #normalization post transform
+            #print(f"Transformed image #{index} - {self.scan_list[index]}.\n\tNormalization post transform starts.")  
             print("Normalize post transformation")
             images = normalize_slices(images)
             
@@ -86,35 +94,6 @@ class MRIDataset(Dataset):
                     train_folders.append(os.path.join(root,folder))
         return train_folders
 
-    def _preprocess_img(self, img):
-        """
-        This method handles 16bit images and convert them into a proper range for torchvision transform, tailored on 8bit images.
-        """
-        preprocess = self.preprocess_type
-
-        slice = sitk.GetArrayFromImage(img)
-        slice.astype(np.float32)
-        
-        print(f"ORIGINAL VALUES FOR SLICE --- MIN: {slice.min()} - MAX: {slice.max()}")
-        if preprocess=="min_max":
-            slice = slice/slice.max()
-        elif preprocess=="16bit":
-            slice = slice/(2**16-1)
-        elif preprocess=="10bit":
-            slice = slice/(2**10-1)
-            slice[slice>1.]=1.
-        elif preprocess=="12bit":
-            slice = slice/(2**12-1)
-            slice[slice>1.]=1.
-        elif preprocess=="norm_and_scale":
-            slice = (slice-slice.mean())/slice.std()
-            slice = (slice - slice.min())/(slice.max()-slice.min())
-        else:
-            slice = (slice-slice.mean())/slice.std()
-        print(f"\tPOST VALUES FOR SLICE --- MIN: {slice.min()} - MAX: {slice.max()}\n")
-        
-        return  slice
-    
     def _define_subsequences(self, folders: "list[str]"):
         """
             sequences è la lista di folders ottenute prima 
@@ -216,22 +195,22 @@ class MRIDataset(Dataset):
                             diff_bound = extra_slices_per_side - (index_instance)
                             upper_bound = min(max_instance, (index_instance + extra_slices_per_side + diff_bound))
 
-                #print(f"Per questa sequenza i bound sono: LB {lower_bound} - INDEX {index_instance} - UB {upper_bound}") 
+                #print(f"Per questa sequenza i bound sono: LB {lower_bound} - INDEX {index_instance} - UB {upper_bound}")    
                 for img in images:
                     img_instance = int(img.GetMetaData('0020|0013'))
                     if img_instance >= index_instance and img_instance <= upper_bound:
                         image_count += 1
                         if scan_string != "DCE":   
-                            #float_slice = sitk.GetArrayFromImage(img)
-                            slices.append(self._preprocess_img(img))
+                            float_slice = sitk.GetArrayFromImage(img)
+                            slices.append(float_slice.astype(np.float32))
                         else:
                             slices.append(img)
 
                     if img_instance < index_instance and img_instance >= lower_bound:
                         image_count += 1
                         if scan_string != "DCE":
-                            #float_slice = sitk.GetArrayFromImage(img)
-                            slices.append(self._preprocess_img(img))
+                            float_slice = sitk.GetArrayFromImage(img)
+                            slices.append(float_slice.astype(np.float32))
                         else:
                             slices.append(img)
 
@@ -286,10 +265,11 @@ class MRIDataset(Dataset):
         labels = torch.from_numpy(labels).to(torch.float32) 
         print(f"Labels dtype: {labels.dtype}")
         print(f"Channels: {lista_dei_tagli}")
+        #print(f"Labels: {labels}")
         print(f"Scan list: {scan_list}")
         print(f"Extra slice considered: {extra_slices_per_side} - total subsequence lenght: {extra_slices_per_side*2+1}")
 
-        return features, labels, scan_list, extra_slices_per_side, paz_list           
+        return features, labels, scan_list, extra_slices_per_side, paz_list           #scan_list = NAC_1, NAC_1,....per ogni foto
 
     def _class_balance(self, labels_array: np.array):
         """
@@ -307,8 +287,11 @@ class MRIDataset(Dataset):
                 counter_0+=1
             else:
                 counter_1+=1
+        # val_0 = counter_0/(k*2+1)
+        # val_1 = counter_1/(k*2+1)
+        #return torch.Tensor([val_0, val_1])
         return {'0':counter_0/(k*2+1), '1':counter_1/(k*2+1)}
-    
+
     def _define_DCE(self, T1_1, T1_2):
         new_patient = ""
         DCE_dict = {}
@@ -359,18 +342,18 @@ class MRIDataset(Dataset):
 
                 if "DCE_peak" in self.branches_list:
                     if patient_name == patient and time == DCE_peak:
-                        DCE_peak1.append(self._preprocess_img(img))
+                        DCE_peak1.append(sitk.GetArrayFromImage(img).astype(np.float32))
 
                 if "DCE_3TP" in self.branches_list:
                     if patient_name == patient:
                         if time == DCE_pre:
-                            pre_array.append(self._preprocess_img(img))
+                            pre_array.append(sitk.GetArrayFromImage(img).astype(np.float32))
                             DCE_count += 1
                         elif time == DCE_peak:
-                            peak_array.append(self._preprocess_img(img))
+                            peak_array.append(sitk.GetArrayFromImage(img).astype(np.float32))
                             DCE_count += 1
                         else:
-                            post_array.append(self._preprocess_img(img))
+                            post_array.append(sitk.GetArrayFromImage(img).astype(np.float32))
                             DCE_count += 1
                         if DCE_count == slices*3:
                             for i in range(slices):
@@ -413,18 +396,18 @@ class MRIDataset(Dataset):
 
                 if "DCE_peak" in self.branches_list:
                     if patient_name == patient and time == DCE_peak:
-                        DCE_peak2.append(self._preprocess_img(img))
+                        DCE_peak2.append(sitk.GetArrayFromImage(img).astype(np.float32))
 
                 if "DCE_3TP" in self.branches_list:
                     if patient_name == patient:
                         if time == DCE_pre:
-                            pre_array.append(self._preprocess_img(img))
+                            pre_array.append(sitk.GetArrayFromImage(img).astype(np.float32))
                             DCE_count += 1
                         elif time == DCE_peak:
-                            peak_array.append(self._preprocess_img(img))
+                            peak_array.append(sitk.GetArrayFromImage(img).astype(np.float32))
                             DCE_count += 1
                         else:
-                            post_array.append(self._preprocess_img(img))
+                            post_array.append(sitk.GetArrayFromImage(img).astype(np.float32))
                             DCE_count += 1
                         if DCE_count == slices*3:
                             for i in range(slices):
@@ -462,7 +445,20 @@ class MRIDataset(Dataset):
                 if feature.shape[1] == 1:
                     X_sub = torch.repeat_interleave(X_sub,repeats = 3, dim=1)
                 X_sub = X_sub.to(torch.float32).unsqueeze(0) 
-                X = torch.cat([X, X_sub], dim = 0)
+
+                # print(f"\tShape pre normalization: {X_sub.shape}")
+                #normalizzazione preventiva ----------------------------------------- #TODO valutare come cambiare questo step 
+                X_sub_normalized = torch.Tensor()
+                for slice in range(X_sub.shape[1]):
+                    slice = normalize_slice_channelwise(X_sub[0][slice])
+                    X_sub_normalized = torch.cat([X_sub_normalized, slice.unsqueeze(0)])
+                
+                X_sub_normalized = X_sub_normalized.unsqueeze(0)
+                #-------------------------------------------------------------
+
+                # print(f"\tShape post normalization: {X_sub_normalized.shape}")
+                X = torch.cat([X, X_sub_normalized], dim = 0)
+                #X = torch.cat([X, X_sub], dim = 0)
                 print(f"Shape check - line 459 in define_input: {X.shape}")
 
         Y = F.one_hot(labels.to(torch.int64), 2) #config.NB_CLASSES)
@@ -482,13 +478,14 @@ class MRIDataModule(pl.LightningDataModule):
         #self.slices = slices
         self.batch_size = batch_size
         self.num_workers = num_workers
-        self.train_transformations = get_transformations_COPY()
-        self.val_transformations = get_val_transformations()
+        self.transformations = get_transformations()
 
-        self.train_dataset = MRIDataset(training_folders, slices, transform = self.val_transformations)
+        self.train_dataset = MRIDataset(training_folders, slices, transform = self.transformations)
         self.class_weights = self.train_dataset.class_weights_tensor    #class weight is computed only over the training dataset, and is used in the computation of the training loss ONLY
-        self.validation_dataset = MRIDataset(validation_folders, slices, transform=self.val_transformations)
+        self.validation_dataset = MRIDataset(validation_folders, slices)
         self.test_dataset = self.validation_dataset
+
+        self.transformations = get_transformations()
 
     # def setup(self, stage):
     #     self.train_dataset = MRIDataset(self.training_folders, self.slices, transform = self.transformations)
