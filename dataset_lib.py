@@ -93,7 +93,7 @@ class MRIDataset(Dataset):
         preprocess = self.preprocess_type
 
         slice = sitk.GetArrayFromImage(img)
-        slice.astype(np.float32)
+        #slice.astype(np.float32)
         
         print(f"ORIGINAL VALUES FOR SLICE --- MIN: {slice.min()} - MAX: {slice.max()}")
         if preprocess=="min_max":
@@ -109,10 +109,18 @@ class MRIDataset(Dataset):
         elif preprocess=="norm_and_scale":
             slice = (slice-slice.mean())/slice.std()
             slice = (slice - slice.min())/(slice.max()-slice.min())
-        else:
+        elif preprocess=="norm":
             slice = (slice-slice.mean())/slice.std()
+        elif preprocess=="to_int16":  #malissimo ---> tutte saturate
+            slice = slice.astype(np.int16)
+        elif preprocess=="to_uint8":  #malissimo ---> tutte saturate
+            slice = slice.astype(np.float32) * 255. / slice.max()
+            slice = slice.astype(np.uint8)
+        else:
+            pass #questo ritornerà un uint16, che non è supportato da pytorch
         print(f"\tPOST VALUES FOR SLICE --- MIN: {slice.min()} - MAX: {slice.max()}\n")
         
+        print(f"Type: {slice.dtype}")
         return  slice
     
     def _define_subsequences(self, folders: "list[str]"):
