@@ -6,40 +6,36 @@ from torch.nn import functional as F
 
 from typing import Dict
 
-#from utils.configs import PARAMS
-
-#I parametri dal parser utilizzati in questo file:
-#   '--dropout', type=float, default=0.5, required=False, help='Dropout rate'
-#   '--fc', type=int, default=128, required=False, help='Size of last FC layer'
-
 #NEW
 import lightning.pytorch as pl
 
 
 class MultiParametricMRIModel(pl.LightningModule): #(nn.Module):
 
-    def __init__(self, FC, dropout):
+    def __init__(self, FC, dropout, backbone="ResNet50"):
         """
-        Each branch is a ResNet50, pre-trained on ImageNet. The head is substituted by a FC (4096,2) followed
-        by a Softmax activation function. The original model seems to output logits instead of soft probs.
+        Each branch is a ResNet50, pre-trained on ImageNet. The head is substituted by a FC (4096,2).
         """
         super(MultiParametricMRIModel, self).__init__()
-        self.branchDWI = BranchModel()
-        self.branchT2 = BranchModel()
-        self.branchDCEpeak = BranchModel()
-        self.branchDCE3TP = BranchModel()
+        self.name = "MultiparametricMRIModel"
+        self.backbone = backbone
+        self.branchDWI = BranchModel(self.backbone, "DWI")
+        self.branchT2 = BranchModel(self.backbone, "T2")
+        self.branchDCEpeak = BranchModel(self.backbone, "DCE_peak")
+        self.branchDCE3TP = BranchModel(self.backbone, "DCE_3TP")
 
-        #Multimodality classifier
+        #Multiparametric classifier
+        features_dimension = 4*self.branchDWI.extracted_features_dim   # TODO - it is better to parametrize the 4 with the number of branches, i.e. len(args.branches)
         self.classifier = nn.Sequential(
             nn.Dropout(p=dropout),
-            nn.Linear(16384, FC), #dimension = 4*4096 = 16384
+            nn.Linear(features_dimension, FC), 
             nn.ReLU(),
             nn.Linear(FC, 2), 
-            nn.Softmax(dim = 1)
+            #nn.Softmax(dim = 1)
         )
 
     def forward(self, x: torch.Tensor) -> Dict:
-        #   (DWI_pre, DWI_post, T2_pre, T2_post,DCEpeak_pre, DCEpeak_post, DCE3TP_pre, DCE3TP_post)
+        #   (DWI_pre, DWI_post, T2_pre, T2_post,DCEpeak_pre, DCEpeak_post, DCE3TP_pre, DCE3TP_post)  # TODO - include the control on the selected branches for the experiments
         x_DWI_1, x_T2_1, x_DCEpeak_1, x_DCE3TP_1 = x[0], x[2], x[4], x[6] 
         x_DWI_2, x_T2_2, x_DCEpeak_2, x_DCE3TP_2 = x[1], x[3], x[5], x[7]
 
@@ -65,21 +61,24 @@ class MultiParametricMRIModel(pl.LightningModule): #(nn.Module):
 
 class BranchModel(pl.LightningModule): #(nn.Module):
 
-    def __init__(self):
+    def __init__(self, backbone, branch_name):
         """
-        Each branch is a ResNet50, pre-trained on ImageNet. The head is substituted by a FC (4096,2) followed
-        by a Softmax activation function. The original model seems to output logits instead of soft probs.
-        #TODO: Analyze the loss function to understand the output of the individual branches.
+        By default each branch is a ResNet50, pre-trained on ImageNet. The head is substituted by a FC (4096,2).
         """
         super(BranchModel, self).__init__()
 
-        self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-        #adding L2 regularization to conv layers
+        self.branch_name = branch_name
+        if backbone == "ResNet50":
+            self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        else:
+            self.model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        
         #conv_layer_params = [param for name, param in self.model.named_parameters() if 'conv' in name]
         
+        self.extracted_features_dim = 2 * self.model.fc.in_features
         self.model.fc = nn.Sequential(
-                nn.Linear(4096,2)
-                #nn.Softmax(dim=1)                       
+                nn.Linear(self.extracted_features_dim,2),
+                #nn.Softmax(dim=1)                     
             )
         
     def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
@@ -93,7 +92,7 @@ class BranchModel(pl.LightningModule): #(nn.Module):
         x1 = self.model.layer4(x1)
         x1 = self.model.avgpool(x1) 
         x1 = x1.view(int(x1.size()[0]),-1)
-        print(f"Extracted features of single modality, PRE nac: {x1.shape}")
+        print(f"Shape of extracted features by branch {self.branch_name}, PRE nac: {x1.shape}")
 
         x2 = self.model.conv1(x2)
         x2 = self.model.bn1(x2)
@@ -105,12 +104,11 @@ class BranchModel(pl.LightningModule): #(nn.Module):
         x2 = self.model.layer4(x2)
         x2 = self.model.avgpool(x2) 
         x2 = x2.view(int(x2.size()[0]),-1)
-        print(f"Extracted features of single modality, POST nac: {x2.shape}")
+        print(f"Shape of extracted features by branch {self.branch_name}, POST nac: {x2.shape}")
 
         conc_features = torch.cat((x1, x2), dim=1)
-        print(f"Shape features single modality concatenated (pre + post NAC): {conc_features.shape}\n")
+        print(f"Shape of concatenated features (branch {self.branch_name}, pre + post NAC): {conc_features.shape}\n")
         probs = self.model.fc(conc_features)
-        #print(f"probs: {probs}\n")
         
         return conc_features, probs
     
