@@ -1,9 +1,12 @@
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-checkpoint_filepath="checkpoint"
 
-def get_callbacks(checkpoint: bool = True, earlystop: bool = True, lr_monitor: bool = True) -> list:
+
+def get_callbacks(checkpoint: bool = True, 
+                  earlystop: bool = True, 
+                  lr_monitor: bool = True, 
+                  fold_num: int = 1, stage: int = 1) -> list:
     """
     Returns the list of the callbacks for the Lightning trainer.
 
@@ -16,6 +19,8 @@ def get_callbacks(checkpoint: bool = True, earlystop: bool = True, lr_monitor: b
     """
     cb_list = []
     
+    checkpoint_filepath=f"ckpt_{stage}_{fold_num}"
+
     if checkpoint:
         checkpoint_cb = ModelCheckpoint(
             filename = checkpoint_filepath,
