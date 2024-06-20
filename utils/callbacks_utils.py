@@ -1,12 +1,11 @@
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-
-
+import os
 
 def get_callbacks(checkpoint: bool = True, 
                   earlystop: bool = True, 
                   lr_monitor: bool = True, 
-                  fold_num: int = 1, stage: int = 1) -> list:
+                  fold_num: int = 1, exp_name: str = "colorize", architecture: str = "multibranch", preprocess: str = "preprocess") -> list:
     """
     Returns the list of the callbacks for the Lightning trainer.
 
@@ -14,15 +13,19 @@ def get_callbacks(checkpoint: bool = True,
         checkpoint (bool): whether to use a checkpoint cb. Defaults to True.
         earlystop (bool): whether to use an early stopping cb. Defaults to True.
         lr_monitor (bool): whether to use a lr monitoring cb. Defaults to True.
+
+        fold_num, exp_name and preprocess are only used for the checkpoint savepath.
     Returns:
         list[lightningtorch.Callbacks]: the list with the chosen callbacks.
     """
     cb_list = []
     
-    checkpoint_filepath=f"ckpt_{stage}_{fold_num}"
+    checkpoint_filepath=f"ckpt_{exp_name}_{preprocess}"
+    dir_path = os.path.join(f"./CHECKPOINTS/{architecture}",f"Fold_{fold_num}") +"/"
 
     if checkpoint:
         checkpoint_cb = ModelCheckpoint(
+            dirpath=dir_path,
             filename = checkpoint_filepath,
             monitor='val_auroc',
             mode='max',

@@ -6,6 +6,10 @@ import torch
 import pandas as pd
 from datetime import datetime
 
+from .configurations import get_model_setup
+from model_global import NACLitModel
+from model_MONO import MonobranchLitModel
+
 Kfold_val = [[10, 13, 18, 22, 28, 31, 32, 37, 4], #5, 29 missing - 31 double
               [1, 12, 14, 16, 19, 26, 33, 35, 9],
               [15, 17, 2, 20, 24, 27, 3, 30, 7],
@@ -118,6 +122,41 @@ def Kfold_split(folders, k):
 
     return Kfold_list
 
+def define_model(fold, args, class_weights, folder_time):
+    """
+    Depending on the configurations of the experiments, returns an appropriate LightningModule object
+    for the trainer.
+    """
+    colorize, freeze_backbone = get_model_setup(args.exp_name)
+
+    if args.exp_name != "all":
+        # this is baseline or stage 1 : no load from checkpoint
+        naclitmodel = NACLitModel(args.slices, args.fc, args.dropout, args.architecture,
+                            args.exp_name, colorize, freeze_backbone, args.backbone, args.optim, 
+                            args.learning_rate, args.l2_reg, 
+                            class_weights, folder_time, fold, preprocess=args.preprocess)
+    else:
+        # This is stage 2 of learning: fine tuning starting from checkpoint
+        ckpt_path = retrieve_ckpt_path(args.architecture, args.preprocess, fold)
+        print(f"Ckpt path: {ckpt_path}")
+        naclitmodel = NACLitModel.load_from_checkpoint(ckpt_path, 
+                            num_slices= args.slices, fc_dimension=args.fc, dropout=args.dropout, architecture=args.architecture,
+                            exp_name=args.exp_name, colorize=colorize, freeze_backbone=freeze_backbone, 
+                            backbone=args.backbone, optim=args.optim, 
+                            lr=args.learning_rate, wd=args.l2_reg, 
+                            class_weights=class_weights, folder_time=folder_time, 
+                            fold_num=fold, preprocess=args.preprocess)
+
+    naclitmodel.model._reset_classifiers_layers()
+
+    return naclitmodel
+
+def retrieve_ckpt_path(architecture:str, preprocess:str, fold_num:int):
+    checkpoint_filepath=f"ckpt_colorization_{preprocess}"
+    dir_path = os.path.join(f"./CHECKPOINTS/{architecture}",f"Fold_{fold_num+1}") +"/"
+    ckpt_filepath = os.path.join(dir_path, checkpoint_filepath+".ckpt")
+    return ckpt_filepath
+
 def print_results(roc_slice, roc_patient):
     print("Print dei results")
     
@@ -225,14 +264,19 @@ def export_result_as_df(slice_dictionaries, patient_dictionaries, args):
     df2 = output_list[1]
     
     df3 = pd.DataFrame({
+        "Experiment": [args.exp_name],
+        "Architecture": [args.architecture],
         "Preprocess": [args.preprocess],
         "Epochs": [args.epochs],
-        "LR": [args.learning_rate]
+        "LR": [args.learning_rate],
+        "Weight Decay": [args.l2_reg]
     }).transpose()
-
+    lr_label = len(str(args.learning_rate).split('.')[1])
+    wd_label = len(str(args.l2_reg).split('.')[1])
     timestamp = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-    with pd.ExcelWriter(f"analisi_dei_risultati_aggregati_{timestamp}.xlsx") as writer:
+    with pd.ExcelWriter(f"{args.architecture}_{args.exp_name}__lr{lr_label}_wd{wd_label}_{timestamp}.xlsx") as writer:
         df1.to_excel(writer, sheet_name=f'{levels[0]}_level')
         df2.to_excel(writer, sheet_name=f'{levels[1]}_level')
         df3.to_excel(writer, sheet_name=f'Iperparametri')
 
+    return f"{args.architecture}_{args.exp_name}_aggregati_{timestamp}.xlsx"

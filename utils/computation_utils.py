@@ -58,11 +58,6 @@ def compute_loss(y_pred_dict: Dict, y_true: torch.Tensor, secondary_weight: floa
 
     else:
         return torch.tensor([100.], dtype = torch.float32)
-        # loss_DWI = sigmoid_focal_loss(y_pred_DWI, y_true, reduction="mean") 
-        # loss_T2 = sigmoid_focal_loss(y_pred_T2, y_true, reduction="mean")
-        # loss_DCEpeak = sigmoid_focal_loss(y_pred_DCEpeak, y_true, reduction="mean")
-        # loss_DCE3TP = sigmoid_focal_loss(y_pred_DCE3TP, y_true, reduction="mean")
-        # loss_pcr = sigmoid_focal_loss(y_pred_pCR, y_true, reduction="mean")
 
     print(f"loss_DWI: {loss_DWI}")
     print(f"loss_T2: {loss_T2}")
@@ -74,6 +69,38 @@ def compute_loss(y_pred_dict: Dict, y_true: torch.Tensor, secondary_weight: floa
     print(loss)
     
     return loss
+
+def compute_loss_MONO(y_pred_dict: Dict, y_true: torch.Tensor, type="cross_entropy", weights = None):
+    """
+    Compute the loss function considering all the different branches and the corresponding weights.
+
+    Args:
+        y_pred_dict (dict): a dictionary containing as values the tensors with probabilities from each branch.
+        y_true (torch.Tensor): the tensor containing the true labels.
+        type (str): Whether to use binary cross entropy or sigmoid focal loss. Defaults to 'bce', binary cross entropy.
+    Returns:
+        loss (torch.Tensor): a tensor containing the resulting loss.
+    """
+    y_pred_pCR = y_pred_dict["pCR"]
+
+    #print(f"Check where the tensors are: Y_pred_DWI: {y_pred_DWI.device} | y_true: {y_true.device}")
+    
+    if type == "bce":
+        if weights is not None:
+            pos_weight = torch.Tensor([weights[1]/weights[0], weights[0]/weights[1]]).to(weights.device)
+        else:
+            pos_weight = None
+        loss_pcr = binary_cross_entropy_with_logits(y_pred_pCR, y_true, reduction="mean", pos_weight=pos_weight)
+
+    elif type =="cross_entropy":
+        ce_loss = torch.nn.CrossEntropyLoss(weight=weights,reduction='mean')
+        loss_pcr = ce_loss(y_pred_pCR, y_true.argmax(axis=-1))
+
+    else:
+        return torch.tensor([100.], dtype = torch.float32)
+
+    print(f"loss_pcr: {loss_pcr}")
+    return loss_pcr
 
 def get_patient_level(Y_test: torch.Tensor, Y_prob: torch.Tensor, slices: int) -> tuple[torch.Tensor, torch.Tensor]:
     """

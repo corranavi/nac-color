@@ -1,9 +1,24 @@
 import os
 import argparse
 
+MODEL_SETUP = {
+    "baseline":{
+        "COLORIZE": False,
+        "FREEZE_BACKBONE": False
+    },
+    "colorization":{
+        "COLORIZE": True,
+        "FREEZE_BACKBONE": True
+    },
+    "all":{
+        "COLORIZE": True,
+        "FREEZE_BACKBONE": False
+    }
+}
+
 def parse_arguments():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter, description='Deep Learning on NAC Data')
-    parser.add_argument('--exp_name', type=str, default="", help="Folder name")
+    parser.add_argument('--exp_name', type=str, default="colorization", help="Name of the experiment", choices=["baseline", "colorization","baseline_all", "colorization_all", "all"])
 
     # Dataset parameters
     parser.add_argument('--input_path', type=str, default="dataset\\dataset_mini", required=False, help='Dataset input path')
@@ -16,6 +31,7 @@ def parse_arguments():
     parser.add_argument('--epochs', type=int, default=15, required=False, help='Number of epochs')
     parser.add_argument('--batch', type=int, default=12, required=False, help='Batch size')
     parser.add_argument('--learning_rate', type=float, default=0.0001, required=False, help='Learning rate')
+    parser.add_argument('--l2_reg', type=float, default=0.0001, required=False, help='L2 regularization alpha value')
     parser.add_argument('--optim', type=str, default='sgd', required=False, help='Optimizer')                             #not in use
     parser.add_argument('--momentum', type=float, default=0.9, required=False, help='Momentum value')                     #not in use
     parser.add_argument('--loss_function', type=str, default='binary_crossentropy', required=False, help='Loss function') #not in use
@@ -29,13 +45,13 @@ def parse_arguments():
     parser.add_argument('--checkpoint', type=str, default="", required=False, help="Checkpoint path")
 
     # Architecture parameters
+    parser.add_argument('--architecture', type=str, default="multibranch", help="Type of the architecture, mono or multibranch", choices=["multibranch", "monobranch"])
     parser.add_argument('--branches', type=str, action='append', required=False,
                 help='Choose which branches of the architecture to use: DWI, T2, DCE_peak, DCE_3TP')                     #not in use
     parser.add_argument('--load_weights', type=int, default=0, required=False,
                         help='Whether to load weights from trained model (to be placed in the folder "weights/") (0=no, 1=yes)') #not in use
     parser.add_argument('--backbone', type=str, default="ResNet50", required=False, help="Backbone for the feature extraction step")
     parser.add_argument('--dropout', type=float, default=0.5, required=False, help='Dropout rate')
-    parser.add_argument('--l2_reg', type=float, default=0.0001, required=False, help='L2 regularization alpha value')
     parser.add_argument('--fc', type=int, default=128, required=False, help='Size of last FC layer')
 
     # Extra parameters
@@ -44,3 +60,6 @@ def parse_arguments():
     
     args = parser.parse_args()
     return args
+
+def get_model_setup(exp_name:str):
+    return MODEL_SETUP[exp_name]["COLORIZE"], MODEL_SETUP[exp_name]["FREEZE_BACKBONE"]
