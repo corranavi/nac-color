@@ -7,8 +7,7 @@ import pandas as pd
 from datetime import datetime
 
 from .configurations import get_model_setup
-from model_global import NACLitModel
-from model_MONO import MonobranchLitModel
+from model import NACLitModel
 
 Kfold_val = [[10, 13, 18, 22, 28, 31, 32, 37, 4], #5, 29 missing - 31 double
               [1, 12, 14, 16, 19, 26, 33, 35, 9],
