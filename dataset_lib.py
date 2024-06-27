@@ -53,8 +53,8 @@ class MRIDataset(Dataset):
         images = self.slices[index]
         labels = self.labels[index]
 
-        if index==0 or index==2:
-            print(images)
+        #if index==0 or index==2:
+        #    print(images)
 
         if self.transform is not None:
             images = self.transform(images)
@@ -249,7 +249,7 @@ class MRIDataset(Dataset):
         self._check_class_balance(np.array(labels))
         
         labels = np.array(labels, dtype=int)
-        print(labels[:,0])
+        #print(labels[:,0])
 
         class_weights = compute_class_weight(class_weight='balanced',classes=np.unique(labels[:,0]),y=labels[:,0])  #le class weights vanno calcolate sull'intero training dataset
         self.class_weights_tensor = torch.tensor(class_weights, dtype=torch.float32)
@@ -450,7 +450,7 @@ class MRIDataset(Dataset):
             features = features[:len(features)-2]
             for DCE_feature in DCE_features:
                 features.append(DCE_feature)
-        print(f"CI SONO {len(features)} MODALITA''''''")
+        print(f"There are {len(features)} modalities''''''")
 
         
         modalities = {0: 'DWI pre-NAC',

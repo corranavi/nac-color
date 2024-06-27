@@ -24,7 +24,7 @@ def parse_arguments():
     parser.add_argument('--input_path', type=str, default="dataset\\dataset_mini", required=False, help='Dataset input path')
     parser.add_argument('--slices', type=int, default=3, required=False,
                         help='How many more slice to add to the dataset besides the index one')
-    parser.add_argument('--preprocess', type=str, default="", required=False, help="preprocess type")
+    parser.add_argument('--preprocess', type=str, default="12bit", required=False, help="preprocess type")
 
     # Training parameters
     parser.add_argument('--folds', type=int, default=4, required=False, help='Number of k-folds for CV')

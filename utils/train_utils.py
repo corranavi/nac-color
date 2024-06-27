@@ -156,6 +156,12 @@ def retrieve_ckpt_path(architecture:str, preprocess:str, fold_num:int):
     ckpt_filepath = os.path.join(dir_path, checkpoint_filepath+".ckpt")
     return ckpt_filepath
 
+def retrieve_ckpt_path_for_evaluate(architecture:str, exp:str, preprocess:str, fold_num:int):
+    checkpoint_filepath=f"ckpt_{exp}_{preprocess}"
+    dir_path = os.path.join(f"./CHECKPOINTS/{architecture}",f"Fold_{fold_num+1}") +"/"
+    ckpt_filepath = os.path.join(dir_path, checkpoint_filepath+".ckpt")
+    return ckpt_filepath
+
 def print_results(roc_slice, roc_patient):
     print("Print dei results")
     
@@ -273,9 +279,10 @@ def export_result_as_df(slice_dictionaries, patient_dictionaries, args):
     lr_label = len(str(args.learning_rate).split('.')[1])
     wd_label = len(str(args.l2_reg).split('.')[1])
     timestamp = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-    with pd.ExcelWriter(f"{args.architecture}_{args.exp_name}__lr{lr_label}_wd{wd_label}_{timestamp}.xlsx") as writer:
+    output_file_name = f"{args.architecture}_{args.exp_name}_lr{lr_label}_wd{wd_label}_{timestamp}.xlsx"
+    with pd.ExcelWriter(output_file_name) as writer:
         df1.to_excel(writer, sheet_name=f'{levels[0]}_level')
         df2.to_excel(writer, sheet_name=f'{levels[1]}_level')
         df3.to_excel(writer, sheet_name=f'Iperparametri')
 
-    return f"{args.architecture}_{args.exp_name}_aggregati_{timestamp}.xlsx"
+    return output_file_name
