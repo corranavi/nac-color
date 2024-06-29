@@ -114,7 +114,6 @@ def save_images(images, output_name):
     plt.close()
 
 def get_model_from_ckpt(architecture, fold:int=1, stage:int=1):
-    #TODO - definire il metodo che si decida architettura e quale stage fare
     root = "./checkpoints"
     exp = "colorization" if stage == 1 else "all"
     ckpt_path = os.path.join(root,architecture,f"Fold_{str(fold)}",f"ckpt_{exp}_12bit.ckpt")
@@ -174,7 +173,7 @@ def colorize_and_predict_single_slice(model, dataset, index):
     return images, unnormalized_images, colorized, predicted_class
 
 def split_pre_and_post_NAC_for_visualize(one_slice_all_modalities, architecture="monobranch"):
-    """ Da usare SOLO per l'architettura monobranch"""
+    """ """
     if architecture=="monobranch":
         DWI_pre = one_slice_all_modalities[0]
         T2_pre = one_slice_all_modalities[2]
@@ -242,20 +241,24 @@ def plot_single_image(image_tensor, caption=""):
     plt.suptitle(caption)
     plt.show()
 
-CKPT_COL= "C:\\Users\\c.navilli\\Documents\\DL\\Thesis\\Code\\sbatch_jobs\\ckpt_colorization_12bit.ckpt"
-CKPT_ALL= "C:\\Users\\c.navilli\\Documents\\DL\\Thesis\\Code\\sbatch_jobs\\ckpt_all_12bit.ckpt"
-
 if __name__ == "__main__":
     full_path_to_dataset = "C:\\Users\\c.navilli\\Desktop\\Prova\\dataset_mini"
-
-    ARCHITECTURE = "monobranch"
-    STAGE = 1
+    print(f"Choose Architecture ['monobranch', 'multibranch']")
+    ARCHITECTURE = input()
+    print(f"Choose stage: [1,2]")
+    STAGE = eval(input())
+    print(f"Choosse fold: [1, 2, 3, 4]")
+    fold_idx = eval(input())
+    print(f"Print single original images? [0: no, 1:yes]")
+    print_single_image_original = eval(input())
+    print(f"Print single colorized images? [0: no, 1:yes]")
+    print_single_image_colorized = eval(input())
 
     folders_list = retrieve_folders_list(full_path_to_dataset)
     datasets_list = Kfold_split(folders_list, 1)
     transformations = get_val_transformations()
 
-    image_visualizer = ImageVisualizer(architecture=ARCHITECTURE,fold=1, stage=STAGE)
+    image_visualizer = ImageVisualizer(architecture=ARCHITECTURE,fold=fold_idx, stage=STAGE)
     image_visualizer.set_dataset(datasets_list[0][0])
     image_visualizer.colorize_and_predict_whole_dataset()
 
@@ -292,91 +295,21 @@ if __name__ == "__main__":
             # Test sul multibranch
             original_image, colorized_images = image_visualizer.get_original_and_colorized_slice(slice_idx= slice_idx) #ho due tensori da 8 immagini ciascuna
             pre_nac, post_nac = split_pre_and_post_NAC_for_visualize(original_image, "multibranch")
-            colorized_pre_nac, colorized_post_nac = split_pre_and_post_NAC_for_visualize(original_image, "multibranch")
+            colorized_pre_nac, colorized_post_nac = split_pre_and_post_NAC_for_visualize(colorized_images, "multibranch")
+            
+            if print_single_image_original:
+                for img in range(pre_nac.shape[0]):
+                    plot_single_image(pre_nac[img], "")
+                for img in range(post_nac.shape[0]):
+                    plot_single_image(post_nac[img], "")
+            if print_single_image_colorized:
+                for img in range(colorized_pre_nac.shape[0]):
+                    plot_single_image(colorized_pre_nac[img], "")
+                for img in range(colorized_post_nac.shape[0]):
+                    plot_single_image(colorized_post_nac[img], "")
             # Pre-Nac
             plot_grid(pre_nac, "Grayscale pre-NAC scans, Multibranch architecture", architecture="multibranch")
             plot_grid(colorized_pre_nac, "Colorized pre-NAC scans, Multibranch architecture", architecture="multibranch")
             # Post-Nac
             plot_grid(post_nac, "Grayscale post-NAC scans, Multibranch architecture", architecture="multibranch")
             plot_grid(colorized_post_nac, "Colorized post-NAC scans, Multibranch architecture", architecture="multibranch")
-
-    
-
-
-    # dataset = MRIDataset(datasets_list[0][0], 3, transform=transformations, preprocess_type="12bit")
-    # dataset_unnormalized = MRIDataset(datasets_list[0][0], 3, transform=None, preprocess_type="min_max") #per scopi di visualizzazione / stampa
-    
-
-    # all_images= torch.Tensor()
-    # all_unnorm_images= torch.Tensor()
-    # all_labels= torch.Tensor()
-    # first_index_included = 0
-    # last_index_excluded = len(dataset)
-    # for index in range(first_index_included, last_index_excluded):
-    #     images, label = dataset.__getitem__(index)
-    #     unnormalized_images, _ = dataset_unnormalized.__getitem__(index)
-    #     all_images = torch.cat((all_images, images.unsqueeze(0)))
-    #     all_unnorm_images = torch.cat((all_unnorm_images, unnormalized_images.unsqueeze(0)))
-    #     all_labels = torch.cat((all_labels, label))
-
-    # all_labels = all_labels.argmax(dim=1)
-    # litmodel = NACLitModel.load_from_checkpoint(checkpoint_path=CKPT_COL , architecture="monobranch", exp_name="evaluation", colorize=True)
-    # # in alternativa usare poi il get --> litmodel = get_model_from_ckpt(architecture, fold=1, stage=1)
-    # litmodel.eval()
-
-    # with torch.no_grad():
-    #     all_images = all_images.permute(dims=(1,0, *range(2, all_images.dim())))
-    #     colorized, preds = litmodel(all_images)
-    #     predictions = preds['pCR']
-    #     predicted_class = preds['pCR'].argmax(dim=1)
-    
-    # print("True labels: ",all_labels)
-    # print("Predicted labels: ", predicted_class)
-    # #print("Colorized shape: ",colorized.shape)
-
-    # wrong_pred_idxs = np.where(all_labels != predicted_class)[0]
-    # right_pred_idxs = np.where(all_labels == predicted_class)[0]
-    # print(f"Indexes of wrongly predicted slices: ", wrong_pred_idxs)
-    # print(f"Indexes of correctly predicted slices: ", wrong_pred_idxs)
-
-    # colorized = colorized.permute(dims=(1,0,2,4,3))
-    # print(f"normalized shape: {all_images.shape}")
-    # print(f"Unnormalized shape: {all_unnorm_images.shape}")
-    # all_images = all_images.permute(dims=(1,0,2,4,3))
-    # all_unnorm_images = all_unnorm_images.permute(dims=(0,1,2,4,3))
-
-    # # da incapsulare in metodo così che dico se voglio considerare i corretti o gli errati --- ad esempio ha senso leggersi dove ci sono un po' di errori consecutivi (invece che su singola slice)
-    # for right_idx in right_pred_idxs[:2]:
-
-    #     original_minmax = all_unnorm_images[right_idx].squeeze() # - queste sono 8 immagini
-    #     pre,post = split_pre_and_post_NAC_for_visualize(original_minmax)
-
-    #     pre_grid = torchvision.utils.make_grid(pre.view(-1,3,224,224), padding=2, pad_value=1)
-    #     plot_grid(pre_grid, "Pre-NAC original images")
-    #     pre_nac_colorized = colorized[right_idx][0] #- questa è un'immagine sola
-    #     plot_single_image(pre_nac_colorized, "Pre-NAC global colored image")
-
-    #     post_grid = torchvision.utils.make_grid(post.view(-1,3,224,224), padding=2, pad_value=1)
-    #     plot_grid(post_grid, "Post-NAC original images")
-    #     post_nac_colorized = colorized[right_idx][1] # - questea è un'immagine sola
-    #     plot_single_image(post_nac_colorized, "Post-NAC global colored image")
-        # TODO - ripristinare fino a qui
-    #save_images(first, "original_5images.png")
-    #save_images(col, "colorized_5images_all.png")
-        
-    # # Initialize a new run
-    # wandb.init(project="your_project_name")
-
-    # # # Create or load a torch tensor (example with random tensor)
-    # # # Example: a tensor with shape (3, 100, 100) representing an RGB image
-    # # image_tensor = torch.rand(3, 100, 100)
-
-    # # # Convert the torch tensor to a numpy array
-    # # # Tensor shape is (C, H, W), so transpose to (H, W, C)
-    # permuted = pre_nac_colorized.permute(1, 2, 0).numpy()
-    # print(f"Permuted shape: {permuted.shape}")
-    # # # Log the image
-    # wandb.log({"permuted": wandb.Image(permuted)})
-
-    # # # Finish the run2
-    # wandb.finish()

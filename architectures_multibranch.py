@@ -270,7 +270,7 @@ class ColorizationModule(pl.LightningModule):
         # elif type == "deconv":
         #     self.model = Deconv()
         # elif type == "pixelshuffle":
-        self.model = PixelShuffle()
+        self.model = PixelShuffle(scale=2)
 
     def forward(self,x):
         return self.model(x)
@@ -294,7 +294,8 @@ class PixelShuffle(BaseDECO):
 
     def __init__(self, out=224, init=1, scale=4, lrelu=False):
         super().__init__(out, init)
-        self.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=2)
+        #self.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=2) TODO - modifica provata il 2706 (questa line è l'originale)
+        self.conv1 = nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1)
         self.bn1 = nn.BatchNorm2d(64)
         self.act1 = nn.LeakyReLU()
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)

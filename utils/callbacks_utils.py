@@ -1,6 +1,7 @@
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import os
+from datetime import datetime
 
 def get_callbacks(checkpoint: bool = True, 
                   earlystop: bool = True, 
@@ -20,15 +21,15 @@ def get_callbacks(checkpoint: bool = True,
     """
     cb_list = []
     
-    checkpoint_filepath=f"ckpt_{exp_name}_{preprocess}"
+    checkpoint_filepath=f"ckpt_{exp_name}_{datetime.now().strftime('%Y-%m-%d_%H:%M:%S')}"
     dir_path = os.path.join(f"./CHECKPOINTS/{architecture}",f"Fold_{fold_num}") +"/"
 
     if checkpoint:
         checkpoint_cb = ModelCheckpoint(
             dirpath=dir_path,
             filename = checkpoint_filepath,
-            monitor='val_auroc',
-            mode='max',
+            monitor='val_loss',
+            mode='min',
             save_weights_only=True,
             save_top_k=1,
             verbose=True

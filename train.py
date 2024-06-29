@@ -66,8 +66,12 @@ if __name__ =="__main__":
         trainer.fit(model=litmodel, datamodule=dm)
         trainer.validate(model=litmodel, datamodule=dm)
         
-        ckpt_best = cb_list[0].best_model_path
-        trainer.test(model=litmodel, datamodule=dm, ckpt_path=ckpt_best)
+        #TODO - new on 2806
+        #ckpt_best = cb_list[0].best_model_path
+        trainer.test(model=litmodel, datamodule=dm) #, ckpt_path=ckpt_best)
+        final_model_path = os.path.join(f"./model_weights/{args.architecture}",f"Fold_{i+1}",f"trained_model_{args.exp_name}.ckpt")
+        
+        trainer.save_checkpoint(final_model_path)
         wandb.finish()
 
         roc_patient.append(litmodel.patient_dict_test)

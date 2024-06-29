@@ -136,7 +136,7 @@ def define_model(fold, args, class_weights, folder_time):
                             class_weights, folder_time, fold, preprocess=args.preprocess)
     else:
         # This is stage 2 of learning: fine tuning starting from checkpoint
-        ckpt_path = retrieve_ckpt_path(args.architecture, args.preprocess, fold)
+        ckpt_path = retrieve_ckpt_path_first_stage(args.architecture, args.preprocess, fold)
         print(f"Ckpt path: {ckpt_path}")
         naclitmodel = NACLitModel.load_from_checkpoint(ckpt_path, 
                             num_slices= args.slices, fc_dimension=args.fc, dropout=args.dropout, architecture=args.architecture,
@@ -150,16 +150,16 @@ def define_model(fold, args, class_weights, folder_time):
 
     return naclitmodel
 
-def retrieve_ckpt_path(architecture:str, preprocess:str, fold_num:int):
-    checkpoint_filepath=f"ckpt_colorization_{preprocess}"
-    dir_path = os.path.join(f"./CHECKPOINTS/{architecture}",f"Fold_{fold_num+1}") +"/"
-    ckpt_filepath = os.path.join(dir_path, checkpoint_filepath+".ckpt")
+def retrieve_ckpt_path_first_stage(architecture:str, preprocess:str, fold_num:int):
+    checkpoint_filepath=f"trained_model_colorization_FINAL.ckpt"
+    dir_path = os.path.join(f"./model_weights/{architecture}",f"Fold_{fold_num+1}") +"/"
+    ckpt_filepath = os.path.join(dir_path, checkpoint_filepath)
     return ckpt_filepath
 
 def retrieve_ckpt_path_for_evaluate(architecture:str, exp:str, preprocess:str, fold_num:int):
-    checkpoint_filepath=f"ckpt_{exp}_{preprocess}"
-    dir_path = os.path.join(f"./CHECKPOINTS/{architecture}",f"Fold_{fold_num+1}") +"/"
-    ckpt_filepath = os.path.join(dir_path, checkpoint_filepath+".ckpt")
+    checkpoint_filepath=f"trained_model_{exp}_FINAL.ckpt"
+    dir_path = os.path.join(f"./model_weights/{architecture}",f"Fold_{fold_num+1}") +"/"
+    ckpt_filepath = os.path.join(dir_path, checkpoint_filepath)
     return ckpt_filepath
 
 def print_results(roc_slice, roc_patient):

@@ -430,7 +430,7 @@ def get_users_visualization_choices(architecture, max_index):
     return slice_idx, print_single_image_original, print_single_image_colorized
 
 if __name__ == "__main__":
-    full_path_to_dataset = ""
+    full_path_to_dataset = "C:\\Users\\c.navilli\\Desktop\\Prova\\NAC_Input"
     ARCHITECTURE, STAGE, colorization_fold_idx = get_users_model_choices()
 
     folders_list = retrieve_folders_list(full_path_to_dataset)

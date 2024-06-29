@@ -118,7 +118,7 @@ class NACLitModel(pl.LightningModule):
         #x,_ = batch
         loss, logits, labels = self._common_step(batch, batch_idx, train=True)
         accuracy = self.binary_accuracy(logits["pCR"].argmax(axis=-1), labels.argmax(axis=-1))
-        auroc = self.auroc(logits["pCR"][:,1], labels[:,1])
+        auroc = self.auroc(nn.Softmax(dim=1)(logits["pCR"])[:,1], labels[:,1])
         self.log_dict({"train_loss": loss, "train_acc":accuracy, "train_auroc":auroc}, 
                  on_step=False, on_epoch=True, prog_bar=True, logger=True) 
         
@@ -129,7 +129,7 @@ class NACLitModel(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         loss, logits, labels = self._common_step(batch, batch_idx)
         accuracy = self.binary_accuracy(logits["pCR"].argmax(axis=-1), labels.argmax(axis=-1)) 
-        auroc = self.auroc(logits["pCR"][:,1], labels[:,1])
+        auroc = self.auroc(nn.Softmax(dim=1)(logits["pCR"])[:,1], labels[:,1])
         self.log_dict({"val_loss": loss, "val_acc":accuracy, "val_auroc":auroc}, 
                       on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
@@ -140,7 +140,7 @@ class NACLitModel(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         loss, logits, labels = self._common_step(batch, batch_idx)
         accuracy = self.binary_accuracy(logits["pCR"].argmax(axis=-1), labels.argmax(axis=-1)) 
-        auroc = self.auroc(logits["pCR"][:,1], labels[:,1])
+        auroc = self.auroc(nn.Softmax(dim=1)(logits["pCR"])[:,1], labels[:,1])
         self.log_dict({"test_loss": loss, "test_acc":accuracy, "test_auroc":auroc}, 
                       on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
