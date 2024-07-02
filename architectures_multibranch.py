@@ -14,12 +14,19 @@ class NACColorizedMultimodel(pl.LightningModule):
     Full model: colorizer + feature extractors + classifiers
     """
 
-    def __init__(self, FC, dropout, backbone="ResNet50", colorize=False, freeze_backbone = True, ckpt_filepath = ""):
+    def __init__(self, FC, dropout, backbone="ResNet50", colorize=False, colorization_option="unique", freeze_backbone = True, ckpt_filepath = ""):
         super(NACColorizedMultimodel, self).__init__()
         self.colorize = colorize
+        self.colorization_option = colorization_option
 
-        if self.colorize:
+        if self.colorize and self.colorization_option=="multicolor":
+            self.colorizer_DWI = ColorizationModule(name="colorizer_DWI")
+            self.colorizer_T2 = ColorizationModule(name="colorizer_T2")
+            self.colorizer_DCEpeak = ColorizationModule(name="colorizer_DCE_peak")
+        elif self.colorize:
             self.colorizer = ColorizationModule()
+        else:
+            pass
 
         self.multiparametric = MultiParametricMRIModel(FC, dropout, backbone=backbone, freeze_backbone = freeze_backbone) 
 
@@ -31,12 +38,24 @@ class NACColorizedMultimodel(pl.LightningModule):
 
         # Colorization
         if self.colorize:
-            x_DWI_1 = self.colorizer(x[0][:,0:1, :, :]) 
-            x_DWI_2 = self.colorizer(x[1][:,0:1, :, :]) 
-            x_T2_1 = self.colorizer(x[2][:,0:1, :, :]) 
-            x_T2_2 = self.colorizer(x[3][:,0:1, :, :]) 
-            x_DCEpeak_1 = self.colorizer(x[4][:,0:1, :, :]) 
-            x_DCEpeak_2 = self.colorizer(x[5][:,0:1, :, :])
+            if self.colorization_option=="multicolor":
+                # each modality has its own colorization pattern
+                x_DWI_1 = self.colorizer_DWI(x[0][:,0:1, :, :]) 
+                x_DWI_2 = self.colorizer_DWI(x[1][:,0:1, :, :]) 
+                x_T2_1 = self.colorizer_T2(x[2][:,0:1, :, :]) 
+                x_T2_2 = self.colorizer_T2(x[3][:,0:1, :, :]) 
+                x_DCEpeak_1 = self.colorizer_DCEpeak(x[4][:,0:1, :, :]) 
+                x_DCEpeak_2 = self.colorizer_DCEpeak(x[5][:,0:1, :, :])
+            else:
+                # all the modalities are colorized according to the same pattern
+                x_DWI_1 = self.colorizer(x[0][:,0:1, :, :]) 
+                x_DWI_2 = self.colorizer(x[1][:,0:1, :, :]) 
+                x_T2_1 = self.colorizer(x[2][:,0:1, :, :]) 
+                x_T2_2 = self.colorizer(x[3][:,0:1, :, :]) 
+                x_DCEpeak_1 = self.colorizer(x[4][:,0:1, :, :]) 
+                x_DCEpeak_2 = self.colorizer(x[5][:,0:1, :, :])
+            
+            # DCE 3TP are already colored
             x_DCE3TP_1 = x[6]
             x_DCE3TP_2 = x[7]
 

@@ -131,7 +131,7 @@ def define_model(fold, args, class_weights, folder_time):
     if args.exp_name != "all":
         # this is baseline or stage 1 : no load from checkpoint
         naclitmodel = NACLitModel(args.slices, args.fc, args.dropout, args.architecture,
-                            args.exp_name, colorize, freeze_backbone, args.backbone, args.optim, 
+                            args.exp_name, colorize, args.colorization_option, freeze_backbone, args.backbone, args.optim, 
                             args.learning_rate, args.l2_reg, 
                             class_weights, folder_time, fold, preprocess=args.preprocess)
     else:
@@ -140,7 +140,8 @@ def define_model(fold, args, class_weights, folder_time):
         print(f"Ckpt path: {ckpt_path}")
         naclitmodel = NACLitModel.load_from_checkpoint(ckpt_path, 
                             num_slices= args.slices, fc_dimension=args.fc, dropout=args.dropout, architecture=args.architecture,
-                            exp_name=args.exp_name, colorize=colorize, freeze_backbone=freeze_backbone, 
+                            exp_name=args.exp_name, colorize=colorize, colorization_option =args.colorization_option, 
+                            freeze_backbone=freeze_backbone, 
                             backbone=args.backbone, optim=args.optim, 
                             lr=args.learning_rate, wd=args.l2_reg, 
                             class_weights=class_weights, folder_time=folder_time, 

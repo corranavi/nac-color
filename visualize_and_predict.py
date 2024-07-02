@@ -53,8 +53,8 @@ class MRIAnalyzer:
 
     def _set_model_from_ckpt(self):
         """ Set the model weights from the checkpoint corresponding to the architecture, fold and learning stage speicified at initialization time."""
-        root = "./checkpoints"
-        ckpt_path = os.path.join(root, self.architecture,f"Fold_{str(self.fold)}",f"ckpt_{self.exp}_12bit.ckpt")
+        root = "./model_weights"
+        ckpt_path = os.path.join(root, self.architecture,f"Fold_{str(self.fold)}",f"trained_model_{self.exp}_FINAL.ckpt")
         #print(ckpt_path)
         try:
             self.model = NACLitModel.load_from_checkpoint(checkpoint_path=ckpt_path, architecture=self.architecture, exp_name="evaluation", colorize=True)

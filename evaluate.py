@@ -23,8 +23,8 @@ if __name__ =="__main__":
     pl.seed_everything(args.seed, workers=True)     #https://lightning.ai/docs/pytorch/stable/common/trainer.html#reproducibility
     
     # RETRIEVE DATASET PATHS
-    folders_list = retrieve_folders_list(args.input_path) #("C:\\Users\\c.navilli\\Desktop\\Prova\\dataset_mini") #
-    folder_time = args.exp_name + datetime.now().strftime('%Y-%m-%d_%H-%M-%S-%f')[:-3]
+    folders_list = retrieve_folders_list(args.input_path) #"C:\\Users\\c.navilli\\Desktop\\Prova\\dataset_mini") 
+    folder_time = "eval_"+args.architecture+"_"+args.exp_name+"_" + datetime.now().strftime('%Y-%m-%d_%H-%M-%S-%f')[:-3]
     datasets_list = Kfold_split(folders_list, args.folds)
 
     roc_slice = [] 

@@ -9,6 +9,9 @@ import numpy as np
 from torchvision.ops import sigmoid_focal_loss
 from sklearn.metrics import confusion_matrix, roc_auc_score, auc, roc_curve, pairwise_distances
 import plotly.graph_objs as go
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 #from plotly.subplots import make_subplots
 
 accepted_branches = ["DWI","T2","DCE_peak","DCE_3TP"]
@@ -230,6 +233,33 @@ def test_predict(Y_test, Y_prob, level: str = "slice", output_name: str = None, 
     print(confusion_matrix_string)
     print(confusion_matrix_deriv)
     print("Val AUC: {0:.2f}\n".format(roc))
+
+    # TP, FP, TN, FN distribution plots --------------------------------------------------------------------------------------
+    y_scores_pos = Y_prob_cpu[:, 1] # le probabilità della classe positiva
+    print("Prediction SCORES:\n", y_scores_pos)
+    
+    y_pred = Y_prob_cpu.argmax(axis=-1)  #le label predette sono quelle che hanno score massimo
+    y_true_single = Y_test_cpu.argmax(axis=-1)
+    #true_negatives = y_scores_pos[( y_true_single == 0) & ( y_pred == 0)]
+    #false_positives = y_scores_pos[( y_true_single == 0) & (y_pred == 1)]
+    #true_positives = y_scores_pos[( y_true_single == 1) & (y_pred == 1)]
+    #false_negatives = y_scores_pos[( y_true_single == 1) & ( y_pred== 0)]
+    negatives = y_scores_pos[( y_true_single == 0)]
+    positives = y_scores_pos[( y_true_single == 1)]
+
+    plt.figure(figsize=(10, 6))
+    #sns.kdeplot(true_negatives, shade=True, label='True Negatives (−)', color='blue')
+    sns.kdeplot(positives, fill=True, label='Positives', color='green')
+    sns.kdeplot(negatives, fill=True, label='Negatives', color='red')
+    #sns.kdeplot(false_negatives, shade=True, label='False Negatives', color='orange')
+    plt.xlabel('Score')
+    plt.ylabel('Density')
+    plt.title('Distribution of Scores for True Negatives, False Positives, True Positives, and False Negatives')
+    plt.legend()
+    save_path = "images/{0}/{1}-level_{2}_DISTRIBUTIONS_fold{3}.png".format(folder_time, level, output_name, fold + 1)
+    plt.savefig(save_path)
+    plt.close()
+    # ------------------------------------------------------------------------------------------------------------------------
 
     test_array = [roc, ACC, TPR, TNR, F1_SCORE]
     return np.array(test_array)

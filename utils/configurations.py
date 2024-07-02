@@ -48,6 +48,7 @@ def parse_arguments():
     parser.add_argument('--architecture', type=str, default="multibranch", help="Type of the architecture, mono or multibranch", choices=["multibranch", "monobranch"])
     parser.add_argument('--branches', type=str, action='append', required=False,
                 help='Choose which branches of the architecture to use: DWI, T2, DCE_peak, DCE_3TP')                     #not in use
+    parser.add_argument('--colorization_option', type=str, default="multicolor", help="Type of the colorizer architecture, one for each channel or a unique module.", choices=["multicolor", "unique"])
     parser.add_argument('--load_weights', type=int, default=0, required=False,
                         help='Whether to load weights from trained model (to be placed in the folder "weights/") (0=no, 1=yes)') #not in use
     parser.add_argument('--backbone', type=str, default="ResNet50", required=False, help="Backbone for the feature extraction step")

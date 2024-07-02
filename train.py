@@ -24,7 +24,7 @@ if __name__ =="__main__":
     
     # RETRIEVE DATASET PATHS
     folders_list = retrieve_folders_list(args.input_path)
-    folder_time = args.exp_name + datetime.now().strftime('%Y-%m-%d_%H-%M-%S-%f')[:-3]
+    folder_time = args.architecture+"_"+args.exp_name+"_"+ datetime.now().strftime('%Y-%m-%d_%H-%M')
     datasets_list = Kfold_split(folders_list, args.folds)
 
     roc_slice = [] 

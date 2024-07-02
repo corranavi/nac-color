@@ -17,7 +17,7 @@ from utils.callbacks_utils import get_LR_scheduler
 
 class NACLitModel(pl.LightningModule):
 
-    def __init__(self, num_slices = 3, fc_dimension = 128, dropout = 0.5, architecture="multibranch", exp_name="evaluation", colorize=True, freeze_backbone=False, backbone="ResNet50", optim = "sgd", lr =0.0001, wd=0.001, class_weights=None, folder_time='', fold_num=1, preprocess=""):
+    def __init__(self, num_slices = 3, fc_dimension = 128, dropout = 0.5, architecture="multibranch", exp_name="evaluation", colorize=True, colorization_option="", freeze_backbone=False, backbone="ResNet50", optim = "sgd", lr =0.0001, wd=0.001, class_weights=None, folder_time='', fold_num=1, preprocess=""):
         super().__init__()
         self.exp_name = exp_name
         self.backbone = backbone
@@ -32,7 +32,7 @@ class NACLitModel(pl.LightningModule):
             self.model = NACColorizedMONOmodel(fc_dimension, dropout, self.backbone, colorize = colorize, freeze_backbone=freeze_backbone)
             self.loss_fn = compute_loss_MONO
         else:
-            self.model = NACColorizedMultimodel(fc_dimension, dropout, self.backbone, colorize = colorize, freeze_backbone=freeze_backbone)
+            self.model = NACColorizedMultimodel(fc_dimension, dropout, self.backbone, colorize = colorize, colorization_option=colorization_option, freeze_backbone=freeze_backbone)
             self.loss_fn = compute_loss
 
         if class_weights is not None: 
