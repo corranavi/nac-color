@@ -14,6 +14,11 @@ import numpy as np
 from datetime import datetime
 from model import NACLitModel
 
+#GradCAM
+from pytorch_grad_cam import GradCAM
+from pytorch_grad_cam.utils.image import show_cam_on_image
+from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
+
 import logging
 import wandb
 logging.basicConfig(level=logging.INFO)
@@ -27,10 +32,17 @@ class MRIAnalyzer:
     Once set a dataset for the analyzer, it predicts the labels and also eventually returns the colorized images in input to the feature encoders.
     """
 
-    def __init__(self, architecture:str, fold:int=1, stage:int=1):
+    def __init__(self, architecture:str, fold:int=1, stage:int=1, gradcam=False):
         self.architecture = architecture
         self.fold = fold
-        self.exp = "colorization" if stage == 1 else "all"
+        self.gradcam=gradcam
+        if stage==1:
+            self.exp = "colorization"
+        elif stage ==2:
+            self.exp = "all"
+        else:
+            self.exp = "baseline"
+
         print(f"Model used will be {self.architecture} - experiment {self.exp}, with colorization pattern from fold {self.fold}.")
         self._set_model_from_ckpt()
 
@@ -56,8 +68,10 @@ class MRIAnalyzer:
         root = "./model_weights"
         ckpt_path = os.path.join(root, self.architecture,f"Fold_{str(self.fold)}",f"trained_model_{self.exp}_FINAL.ckpt")
         #print(ckpt_path)
+
         try:
-            self.model = NACLitModel.load_from_checkpoint(checkpoint_path=ckpt_path, architecture=self.architecture, exp_name="evaluation", colorize=True)
+            colorize = False if self.exp == "baseline" else True
+            self.model = NACLitModel.load_from_checkpoint(checkpoint_path=ckpt_path, architecture=self.architecture, exp_name="evaluation", colorize=colorize, colorization_option="multicolor", gradcam=self.gradcam)
         except Exception as e:
             print(f"Something went wrong when loading pre-trained model: {e}")
     
@@ -279,135 +293,57 @@ class ImageVisualizer:
         plt.savefig(output_name, bbox_inches='tight', pad_inches=0)
         plt.close()
 
-# def get_model_from_ckpt(architecture, fold:int=1, stage:int=1):
-#     root = "./checkpoints"
-#     exp = "colorization" if stage == 1 else "all"
-#     ckpt_path = os.path.join(root,architecture,f"Fold_{str(fold)}",f"ckpt_{exp}_12bit.ckpt")
-#     print(ckpt_path)
-#     litmodel = NACLitModel.load_from_checkpoint(checkpoint_path=ckpt_path, architecture=architecture, exp_name="evaluation", colorize=True)
-#     return litmodel
-#     #litmodel.eval()
+class ModelWrapper(torch.nn.Module):
+    """ This class is used only for GradCam, to retrieve the tensor of the predicted logits."""
+    def __init__(self, model, output_key, has_dict=True):
+        super(ModelWrapper, self).__init__()
+        self.model = model
+        self.output_key = output_key
+        self.has_dict = has_dict
 
-# def colorize_and_predict_whole_dataset(model, dataset):
-#     """ Passa al modello tutto il dataset, restituisce immagini originali normalizzate (non utili alla viz), non normalizzate, colorizzate e le predizioni """
-#     model.eval()
-
-#     all_images= torch.Tensor()
-#     all_unnorm_images= torch.Tensor()
-#     all_labels= torch.Tensor()
-
-#     for index in range(0, len(dataset)):
-#         images, label = dataset.__getitem__(index)
-#         dataset_unnormalized= dataset ###
-#         unnormalized_images, _ = dataset_unnormalized.__getitem__(index)
-#         all_images = torch.cat((all_images, images.unsqueeze(0)))
-#         all_unnorm_images = torch.cat((all_unnorm_images, unnormalized_images.unsqueeze(0)))
-#         all_labels = torch.cat((all_labels, label))
-
-#     all_labels = all_labels.argmax(dim=1)
-
-#     with torch.no_grad():
-#         all_images = all_images.permute(dims=(1,0, *range(2, all_images.dim())))
-#         colorized, preds = model(all_images)
-#         predicted_class = preds['pCR'].argmax(dim=1)
-
-#     return all_images, all_unnorm_images, colorized, predicted_class
-
-# def colorize_and_predict_slices_list(model, dataset, list_of_index: list[int]):
-#     for idx in list_of_index:
-#         images, unnormalized_images, colorized, predicted_class = colorize_and_predict_single_slice(model, dataset, idx)
-        #concatenale e dalle in input
-
-
-# def colorize_and_predict_single_slice(model, dataset, index):
-#     """ Passa al modello un'unica slice (con tutte le modalità), restituisce immagini originali normalizzate (non utili alla viz), non normalizzate, colorizzate e le predizioni """
-#     images, label = dataset.__getitem__(index)
-
-#     dataset_unnormalized= dataset ###
-#     unnormalized_images, _ = dataset_unnormalized.__getitem__(index)
-#     images = images.unsqueeze(0)
-#     label = label.argmax(dim=1)
-#     model.eval()
-#     with torch.no_grad():
-#         images = images.permute(dims=(1,0, *range(2, images.dim())))
-#         colorized, preds = model(images)
-#         predicted_class = preds['pCR'].argmax(dim=1)
-#     return images, unnormalized_images, colorized, predicted_class
-
-# def split_pre_and_post_NAC_for_visualize(one_slice_all_modalities, architecture="monobranch"):
-#     """ """
-#     if architecture=="monobranch":
-#         DWI_pre = one_slice_all_modalities[0]
-#         T2_pre = one_slice_all_modalities[2]
-#         DCEt0_pre = one_slice_all_modalities[6][0:1,:,:].repeat(3,1,1)
-#         DCEt1_pre = one_slice_all_modalities[6][1:2,:,:].repeat(3,1,1)
-#         DCEt2_pre = one_slice_all_modalities[6][2:3,:,:].repeat(3,1,1)
-
-#         DWI_post = one_slice_all_modalities[1]
-#         T2_post = one_slice_all_modalities[3]
-#         DCEt0_post = one_slice_all_modalities[7][0:1,:,:].repeat(3,1,1)
-#         DCEt1_post = one_slice_all_modalities[7][1:2,:,:].repeat(3,1,1)
-#         DCEt2_post = one_slice_all_modalities[7][2:3,:,:].repeat(3,1,1)
-
-#         pre = torch.cat((DWI_pre.unsqueeze(0),T2_pre.unsqueeze(0),DCEt0_pre.unsqueeze(0),DCEt1_pre.unsqueeze(0),DCEt2_pre.unsqueeze(0)))
-#         post = torch.cat((DWI_post.unsqueeze(0),T2_post.unsqueeze(0),DCEt0_post.unsqueeze(0),DCEt1_post.unsqueeze(0),DCEt2_post.unsqueeze(0)))
-
-#     else: #multi
-#         DWI_pre = one_slice_all_modalities[0]
-#         T2_pre = one_slice_all_modalities[2]
-#         DCEpeak_pre = one_slice_all_modalities[4]
-#         DCE3TP_pre = one_slice_all_modalities[6]
-
-#         DWI_post = one_slice_all_modalities[1]
-#         T2_post = one_slice_all_modalities[3]
-#         DCEpeak_post = one_slice_all_modalities[5]
-#         DCE3TP_post = one_slice_all_modalities[7]
-
-#         pre = torch.cat((DWI_pre.unsqueeze(0),T2_pre.unsqueeze(0),DCEpeak_pre.unsqueeze(0),DCE3TP_pre.unsqueeze(0)))
-#         post = torch.cat((DWI_post.unsqueeze(0),T2_post.unsqueeze(0),DCEpeak_post.unsqueeze(0),DCE3TP_post.unsqueeze(0)))
-
-#     return pre, post
-
-# def plot_grid(images_tensor, caption="", architecture="monobranch"):
-#     """ Per plottare la griglia con le 5 scan per la slice (singola) passata in input - solo per il monobranch"""
- 
-#     grid_img = torchvision.utils.make_grid(images_tensor, )#nrow=5)
-
-#     # Convert the grid image to numpy for plotting
-#     np_img = grid_img.numpy()
-
-#     plt.figure(figsize=(15, 15))  # Adjust the figsize as needed
-#     labels=["DWI", "T2", "DCE t0", "DCE t1", "DCE t2"] if architecture=="monobranch" else ["DWI", "T2", "DCE peak", "DCE 3TP"]
-#     for i in range(len(labels)):
-#         # Calculate the position to place the label
-#         row = i // len(labels)
-#         col = i % len(labels)
-#         plt.text(col * 224 + 10, row * 224 + 10, labels[i], color='red', fontsize=8, weight='bold')
-#     # Plot the grid
+    def forward(self, x):
+        _ , output = self.model(x)
+        if not self.has_dict:  #il branch singolo ritorna tensore di features concatenate e logits
+            return output
+        return output[self.output_key]
     
-#     plt.imshow(np.transpose(np_img, (1, 2, 0)))  # Convert from (C, H, W) to (H, W, C)
-#     for i in range(len(labels)):
-#         # Calculate the position to place the label
-#         row = i // 5
-#         col = i % 5
-#         plt.text(col * 224 + 10, row * 224 + 10, labels[i], color='red', fontsize=8, weight='bold')
-#     plt.axis('off')  # Turn off the axis
-#     plt.suptitle(caption)
-#     plt.show()
+class GradCamViewer:
+    """ Classe da implementare per GradCam - vedere se spostare su file dedicato che importi mrianalyzer e imageviz """
+    def __init__(self, model):
+        self.wrapped_model = ModelWrapper(model, output_key="pCR")
+        pass
 
-# def plot_single_image(image_tensor, caption=""):
-#     np_img = image_tensor.numpy()
-#     plt.figure(figsize=(15, 15))  # Adjust the figsize as needed
-#     plt.imshow(np.transpose(np_img, (1, 2, 0)))  # Convert from (C, H, W) to (H, W, C)
-#     plt.axis('off')  # Turn off the axis
-#     plt.suptitle(caption)
-#     plt.show()
+    def _set_target_branch(self, target_branch):
+        if target_branch == "DWI":
+            self.target_layer = self.wrapped_model.model.model.multiparametric.branchDWI.model.layer4[-1]
+        elif target_branch == "T2":
+            self.target_layer = self.wrapped_model.model.model.multiparametric.branchT2.model.layer4[-1]
+        elif target_branch == "DCE_peak":
+            self.target_layer = self.wrapped_model.model.model.multiparametric.branchDCEpeak.model.layer4[-1]
+        elif target_branch == "DCE_3TP":
+            self.target_layer = self.wrapped_model.model.model.multiparametric.branchDCE3TP.model.layer4[-1]
+        elif target_branch == "monobranch":
+            self.target_layer = self.wrapped_model.model.model.multiparametric.hyperbranch.model.layer4[-1]
+        else:
+            print(f"Error - no such branch available into the model")
+    
+    def show_gradcam(self, target_branch, tensor_for_predict, background_image, predicted_class):
+        self._set_target_branch(target_branch)
+        numpy_background_image = np.transpose(background_image, (2, 1,0))
+
+        cam = GradCAM(model = self.wrapped_model, target_layers=[self.target_layer],)
+        heatmap = cam(input_tensor=tensor_for_predict, targets = [ClassifierOutputTarget(predicted_class)])[0,:]
+        mri_cam_image = show_cam_on_image(numpy_background_image, heatmap, use_rgb=True, image_weight=0.8)
+        mri_cam_image = np.transpose(mri_cam_image, (1, 0,2))
+        plt.imshow(mri_cam_image,)
+        plt.show()
+
 
 def get_users_model_choices():
     """Gets the visualization settings from the user input."""
-    print(f"MODEL SETTING\nChoose Architecture ['monobranch', 'multibranch']:")
-    ARCHITECTURE = input()
-    print(f"Choose stage [1,2]:")
+    print(f"MODEL SETTING\nChoose Architecture ['0 for monobranch', '1 for multibranch']:")
+    ARCHITECTURE = "monobranch" if eval(input()) == 0 else "multibranch"
+    print(f"Choose stage [1,2] (any other number for baseline experiment, without colors):")
     STAGE = eval(input())
     print(f"Choose fold-related colorization [1, 2, 3, 4]:")
     colorization_fold_idx = eval(input())
@@ -430,17 +366,19 @@ def get_users_visualization_choices(architecture, max_index):
     return slice_idx, print_single_image_original, print_single_image_colorized
 
 if __name__ == "__main__":
-    full_path_to_dataset = "C:\\Users\\c.navilli\\Desktop\\Prova\\NAC_Input"
+    full_path_to_dataset = "C:\\Users\\c.navilli\\Desktop\\Prova\\dataset_mini" #NAC_Input"
     ARCHITECTURE, STAGE, colorization_fold_idx = get_users_model_choices()
 
     folders_list = retrieve_folders_list(full_path_to_dataset)
     datasets_list = Kfold_split(folders_list, 4)
     transformations = get_val_transformations()
     dataset_fold_idx = eval(input("Choose the #fold version of the validation dataset [1,2,3,4]:\n"))-1
+    gradcam_view = eval(input("GradCAM images? [0: no, 1: yes]:\n"))
+    gradcam = True if gradcam_view==1 else False
 
     image_visualizer = ImageVisualizer()
 
-    mri_analyzer = MRIAnalyzer(architecture=ARCHITECTURE,fold=colorization_fold_idx, stage=STAGE)
+    mri_analyzer = MRIAnalyzer(architecture=ARCHITECTURE,fold=colorization_fold_idx, stage=STAGE,)
     mri_analyzer.set_dataset(datasets_list[dataset_fold_idx][1])
     mri_analyzer.colorize_and_predict_whole_dataset()
 
@@ -459,6 +397,10 @@ if __name__ == "__main__":
     max_index = mri_analyzer.input_dataset.__len__()
     slice_idx, print_single_image_original, print_single_image_colorized = get_users_visualization_choices(ARCHITECTURE, max_index)
     idx_list = [slice_idx] #10 ok, interessante
+
+    # print(mri_analyzer.model.model.multiparametric.branchDWI)
+    # exit()
+
     if ARCHITECTURE=="monobranch":
         for slice_idx in idx_list:
             original_image, colorized_images = mri_analyzer.get_original_and_colorized_slice(slice_idx= slice_idx) #la 10 ok
@@ -503,3 +445,16 @@ if __name__ == "__main__":
             # Post-Nac
             image_visualizer.plot_grid(post_nac, "Grayscale post-NAC scans, Multibranch architecture", architecture="multibranch")
             image_visualizer.plot_grid(colorized_post_nac, "Colorized post-NAC scans, Multibranch architecture", architecture="multibranch")
+
+    if gradcam_view == 1:
+        tensor_for_input_predict, _ = mri_analyzer.input_dataset.__getitem__(slice_idx)
+        tensor_for_input_predict = tensor_for_input_predict.unsqueeze(0)
+        tensor_for_input_predict = tensor_for_input_predict.permute(dims=(1,0, *range(2, tensor_for_input_predict.dim())))
+
+        gradcam_viewer = GradCamViewer(mri_analyzer.model)
+        if ARCHITECTURE=="multibranch":
+            for num,branch in zip([1,2,3,0],["T2", "DCEpeak", "DCE3TP", "DWI"]):
+                # immagine_numpy = pre_nac[num].numpy()
+                # immagine_numpy = np.transpose(immagine_numpy, (0, 2,1) )
+                gradcam_viewer.show_gradcam(branch, tensor_for_input_predict, pre_nac[num].numpy(), mri_analyzer.predicted_classes[slice_idx] )
+                

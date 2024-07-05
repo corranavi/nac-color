@@ -43,6 +43,7 @@ def parse_arguments():
     parser.add_argument('--early_stop', type=int, default=0, required=False,
                         help='Whether to use an early stopping policy (0=no, 1=yes)')  #not in use
     parser.add_argument('--checkpoint', type=str, default="", required=False, help="Checkpoint path")
+    parser.add_argument('--epoch_for_ckpt', type=int, default=15, required=False, help="Epoch number of the checkpoint to be evaluated")
 
     # Architecture parameters
     parser.add_argument('--architecture', type=str, default="multibranch", help="Type of the architecture, mono or multibranch", choices=["multibranch", "monobranch"])
@@ -58,6 +59,7 @@ def parse_arguments():
     # Extra parameters
     parser.add_argument('--lime_top', type=int, default=4, required=False, help='Number of relevant lime superpixels')
     parser.add_argument('--lime_pert', type=int, default=100, required=False, help='Number of lime perturbations')
+    parser.add_argument('--wanb_project_name', type=str, default="NACtry", required=False, help='Name of wandb project name')
     
     args = parser.parse_args()
     return args

@@ -35,7 +35,7 @@ if __name__ =="__main__":
         fold_start = datetime.now()
         lr_label = len(str(args.learning_rate).split('.')[1])
         wd_label = len(str(args.l2_reg).split('.')[1])
-        logger_wandb = WandbLogger(save_dir= f"wandb_logs_{i}" , name=f"{args.exp_name}_{args.architecture[:4]}_lr{lr_label}_wd{wd_label}_fold_{i+1}", project="NACtry")
+        logger_wandb = WandbLogger(save_dir= f"wandb_logs_{i}" , name=f"{args.exp_name}_{args.architecture[:4]}_lr{lr_label}_wd{wd_label}_fold_{i+1}", project=args.wanb_project_name)
         dm = MRIDataModule(fold[0], fold[1], slices=args.slices, batch_size=args.batch, preprocess=args.preprocess)
         
         print(f"CLASS WEIGHTS: {dm.class_weights}")
@@ -45,7 +45,7 @@ if __name__ =="__main__":
         litmodel = define_model(fold=i, args=args, class_weights=class_weights, folder_time=folder_time)
 
         cb_list = get_callbacks(checkpoint = True, earlystop = False, lr_monitor = True, 
-                                fold_num=i+1 , exp_name= args.exp_name, architecture=args.architecture, preprocess=args.preprocess)
+                                fold_num=i+1 ,args=args)
 
         # TRAINER INSTANCE
         trainer = pl.Trainer(
@@ -66,10 +66,9 @@ if __name__ =="__main__":
         trainer.fit(model=litmodel, datamodule=dm)
         trainer.validate(model=litmodel, datamodule=dm)
         
-        #TODO - new on 2806
         #ckpt_best = cb_list[0].best_model_path
         trainer.test(model=litmodel, datamodule=dm) #, ckpt_path=ckpt_best)
-        final_model_path = os.path.join(f"./model_weights/{args.architecture}",f"Fold_{i+1}",f"trained_model_{args.exp_name}.ckpt")
+        final_model_path = os.path.join(f"./model_weights/{args.architecture}",f"Fold_{i+1}",f"trained_{args.architecture}_{args.exp_name}_lr{args.learning_rate}_wd{args.l2_reg}.ckpt")
         
         trainer.save_checkpoint(final_model_path)
         wandb.finish()

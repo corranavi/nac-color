@@ -17,7 +17,7 @@ from utils.callbacks_utils import get_LR_scheduler
 
 class NACLitModel(pl.LightningModule):
 
-    def __init__(self, num_slices = 3, fc_dimension = 128, dropout = 0.5, architecture="multibranch", exp_name="evaluation", colorize=True, colorization_option="", freeze_backbone=False, backbone="ResNet50", optim = "sgd", lr =0.0001, wd=0.001, class_weights=None, folder_time='', fold_num=1, preprocess=""):
+    def __init__(self, num_slices = 3, fc_dimension = 128, dropout = 0.5, architecture="multibranch", exp_name="evaluation", colorize=True, colorization_option="", freeze_backbone=False, backbone="ResNet50", optim = "sgd", lr =0.0001, wd=0.001, class_weights=None, folder_time='', fold_num=1, preprocess="", gradcam=False):
         super().__init__()
         self.exp_name = exp_name
         self.backbone = backbone
@@ -27,6 +27,7 @@ class NACLitModel(pl.LightningModule):
         self.wd = wd
         self.folder_time = folder_time
         self.fold_num = fold_num
+        self.gradcam = gradcam
 
         if architecture == "monobranch":
             self.model = NACColorizedMONOmodel(fc_dimension, dropout, self.backbone, colorize = colorize, freeze_backbone=freeze_backbone)
@@ -93,6 +94,7 @@ class NACLitModel(pl.LightningModule):
         images, labels = batch
         images = images.permute(dims=(1,0,*range(2, images.dim()))).to(self.device) #batch and modalities channels must be switched
         labels = labels.squeeze(dim=1).to(self.device)
+        self.model.eval()
         colorized_x, logits = self.model(images)
         if not train:
             print(logits)
@@ -119,12 +121,12 @@ class NACLitModel(pl.LightningModule):
         loss, logits, labels = self._common_step(batch, batch_idx, train=True)
         accuracy = self.binary_accuracy(logits["pCR"].argmax(axis=-1), labels.argmax(axis=-1))
         auroc = self.auroc(nn.Softmax(dim=1)(logits["pCR"])[:,1], labels[:,1])
-        self.log_dict({"train_loss": loss, "train_acc":accuracy, "train_auroc":auroc}, 
+        self.log_dict({"train_loss": loss, "train_acc":accuracy, "train_auroc":auroc, "monitoring_step":self.global_step}, 
                  on_step=False, on_epoch=True, prog_bar=True, logger=True) 
         
         output = {'loss':loss, 'probs': logits, 'labels': labels}
         self.training_step_outputs.append(output)
-        return output
+        return loss #output
     
     def validation_step(self, batch, batch_idx):
         loss, logits, labels = self._common_step(batch, batch_idx)
@@ -135,7 +137,7 @@ class NACLitModel(pl.LightningModule):
 
         output = {'loss':loss, 'probs': logits, 'labels': labels}
         self.validation_step_outputs.append(output)
-        return output
+        return loss #output
     
     def test_step(self, batch, batch_idx):
         loss, logits, labels = self._common_step(batch, batch_idx)
@@ -146,7 +148,7 @@ class NACLitModel(pl.LightningModule):
 
         output = {'loss':loss, 'probs': logits, 'labels': labels}
         self.test_step_outputs.append(output)
-        return output
+        return loss #output
 
     # Hooks for on_epoch = True
     def on_train_epoch_end(self):

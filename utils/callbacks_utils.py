@@ -6,7 +6,7 @@ from datetime import datetime
 def get_callbacks(checkpoint: bool = True, 
                   earlystop: bool = True, 
                   lr_monitor: bool = True, 
-                  fold_num: int = 1, exp_name: str = "colorize", architecture: str = "multibranch", preprocess: str = "preprocess") -> list:
+                  fold_num: int = 1, args = None):
     """
     Returns the list of the callbacks for the Lightning trainer.
 
@@ -21,18 +21,21 @@ def get_callbacks(checkpoint: bool = True,
     """
     cb_list = []
     
-    checkpoint_filepath=f"ckpt_{exp_name}_{datetime.now().strftime('%Y-%m-%d_%H:%M:%S')}"
-    dir_path = os.path.join(f"./CHECKPOINTS/{architecture}",f"Fold_{fold_num}") +"/"
+    checkpoint_filepath=f"ckpt_{args.exp_name}_LR{args.learning_rate}_WD{args.l2_reg}"
+    dir_path = os.path.join(f"./CHECKPOINTS/{args.architecture}",f"Fold_{fold_num}") +"/"
 
     if checkpoint:
         checkpoint_cb = ModelCheckpoint(
+
             dirpath=dir_path,
-            filename = checkpoint_filepath,
-            monitor='val_loss',
-            mode='min',
-            save_weights_only=True,
-            save_top_k=1,
-            verbose=True
+            filename = checkpoint_filepath+"_{epoch}",
+            every_n_epochs=5,
+            save_on_train_epoch_end=False,
+            save_weights_only=False,
+            verbose=True,
+            save_top_k=-1,
+            monitor='monitoring_step',
+            mode="max"
         )
         cb_list.append(checkpoint_cb)
 

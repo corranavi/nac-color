@@ -69,9 +69,9 @@ def compute_loss(y_pred_dict: Dict, y_true: torch.Tensor, secondary_weight: floa
     print(f"loss_pcr: {loss_pcr}")
 
     loss = secondary_weight*loss_DWI + secondary_weight*loss_T2 + secondary_weight*loss_DCEpeak + secondary_weight*loss_DCE3TP + 1.* loss_pcr
-    print(loss)
+    print(f"ECCO IL TIPO DELLA LOSS: {loss.type}")
     
-    return loss
+    return loss.sum()
 
 def compute_loss_MONO(y_pred_dict: Dict, y_true: torch.Tensor, type="cross_entropy", weights = None):
     """

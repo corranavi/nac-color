@@ -54,8 +54,9 @@ if __name__ =="__main__":
             deterministic=True
         )
         
-        ckpt_fold = retrieve_ckpt_path_for_evaluate(args.architecture, args.exp_name, args.preprocess, i)
-        trainer.test(model=litmodel, datamodule=dm, ckpt_path=ckpt_fold)
+        #ckpt_fold = retrieve_ckpt_path_for_evaluate(args.architecture, args.exp_name, args.preprocess, i)
+        ckpt_file_path = retrieve_ckpt_path_for_evaluate(args, i)
+        trainer.test(model=litmodel, datamodule=dm, ckpt_path=ckpt_file_path)
 
         roc_patient.append(litmodel.patient_dict_test)
         roc_slice.append(litmodel.slice_dict_test)
