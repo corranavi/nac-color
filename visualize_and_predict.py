@@ -13,11 +13,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 from datetime import datetime
 from model import NACLitModel
+from PIL import Image
 
 #GradCAM
 from pytorch_grad_cam import GradCAM
 from pytorch_grad_cam.utils.image import show_cam_on_image
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
+import cv2
 
 import logging
 import wandb
@@ -66,7 +68,7 @@ class MRIAnalyzer:
     def _set_model_from_ckpt(self):
         """ Set the model weights from the checkpoint corresponding to the architecture, fold and learning stage speicified at initialization time."""
         root = "./model_weights"
-        ckpt_path = os.path.join(root, self.architecture,f"Fold_{str(self.fold)}",f"trained_model_{self.exp}_FINAL.ckpt")
+        ckpt_path = os.path.join(root, self.architecture,f"Fold_{str(self.fold)}",f"trained_{self.architecture}_{self.exp}_FINAL.ckpt")
         #print(ckpt_path)
 
         try:
@@ -204,6 +206,10 @@ class ImageVisualizer:
         Returns:
             None"""
         np_img = image_tensor.numpy()
+        # np_img_pil = np.transpose(np_img, (1, 2, 0))
+        # pil_image = Image.fromarray(np_img_pil)
+        # pil_image.show()
+
         plt.figure(figsize=(15, 15))  # Adjust the figsize as needed
         plt.imshow(np.transpose(np_img, (1, 2, 0)))  # Convert from (C, H, W) to (H, W, C)
         plt.axis('off')  # Turn off the axis
@@ -302,8 +308,9 @@ class ModelWrapper(torch.nn.Module):
         self.has_dict = has_dict
 
     def forward(self, x):
+        # to handle the fact that the original forwards returns both concatenated features and probabilities
         _ , output = self.model(x)
-        if not self.has_dict:  #il branch singolo ritorna tensore di features concatenate e logits
+        if not self.has_dict: 
             return output
         return output[self.output_key]
     
@@ -323,39 +330,35 @@ class GradCamViewer:
         elif target_branch == "DCE_3TP":
             self.target_layer = self.wrapped_model.model.model.multiparametric.branchDCE3TP.model.layer4[-1]
         elif target_branch == "monobranch":
-            self.target_layer = self.wrapped_model.model.model.multiparametric.hyperbranch.model.layer4[-1]
+            self.target_layer = self.wrapped_model.model.model.multiparametric.branchHyperMRI.model.layer4[-1]
         else:
             print(f"Error - no such branch available into the model")
     
     def show_gradcam(self, target_branch, tensor_for_predict, background_image, predicted_class):
+        print(target_branch)
         self._set_target_branch(target_branch)
-        numpy_background_image = np.transpose(background_image, (2, 1,0))
+        numpy_background_image = np.transpose(background_image, (2, 1, 0)) #prima era 1,2,0
 
         cam = GradCAM(model = self.wrapped_model, target_layers=[self.target_layer],)
         heatmap = cam(input_tensor=tensor_for_predict, targets = [ClassifierOutputTarget(predicted_class)])[0,:]
+
         mri_cam_image = show_cam_on_image(numpy_background_image, heatmap, use_rgb=True, image_weight=0.8)
-        mri_cam_image = np.transpose(mri_cam_image, (1, 0,2))
+        mri_cam_image = np.transpose(mri_cam_image, (1, 0, 2))
         plt.imshow(mri_cam_image,)
         plt.show()
 
-
 def get_users_model_choices():
-    """Gets the visualization settings from the user input."""
+    """Gets the visualization settings from the user input: MODEL and COLORIZATION PATTERN (training-fold related) choice."""
     print(f"MODEL SETTING\nChoose Architecture ['0 for monobranch', '1 for multibranch']:")
     ARCHITECTURE = "monobranch" if eval(input()) == 0 else "multibranch"
     print(f"Choose stage [1,2] (any other number for baseline experiment, without colors):")
     STAGE = eval(input())
     print(f"Choose fold-related colorization [1, 2, 3, 4]:")
     colorization_fold_idx = eval(input())
-    
-    # if ARCHITECTURE=="multibranch":
-    #     print(f"\nVISUALIZATION SETTING\nPrint single original images? [0: no, 1:yes]")
-    #     print_single_image_original = eval(input())
-    #     print(f"Print single colorized images? [0: no, 1:yes]")
-    #     print_single_image_colorized = eval(input())
-    return ARCHITECTURE, STAGE, colorization_fold_idx #print_single_image_original, print_single_image_colorized
+    return ARCHITECTURE, STAGE, colorization_fold_idx
 
 def get_users_visualization_choices(architecture, max_index):
+    """Gets the visualization settings from the user input: INDIVIDUAL vs CONCATENATED choice."""
     print_single_image_original, print_single_image_colorized = 0, 0
     slice_idx = eval(input(f"Index of the slice to be printed [0-{max_index-1}]:\n"))
     if architecture=="multibranch":
@@ -366,7 +369,7 @@ def get_users_visualization_choices(architecture, max_index):
     return slice_idx, print_single_image_original, print_single_image_colorized
 
 if __name__ == "__main__":
-    full_path_to_dataset = "C:\\Users\\c.navilli\\Desktop\\Prova\\dataset_mini" #NAC_Input"
+    full_path_to_dataset = ""
     ARCHITECTURE, STAGE, colorization_fold_idx = get_users_model_choices()
 
     folders_list = retrieve_folders_list(full_path_to_dataset)
@@ -382,7 +385,7 @@ if __name__ == "__main__":
     mri_analyzer.set_dataset(datasets_list[dataset_fold_idx][1])
     mri_analyzer.colorize_and_predict_whole_dataset()
 
-    # Check sugli errori ----------------------------------------------------------------
+    # Check on predictions error ----------------------------------------------------------------
     wrong_idxs, correct_idxs = mri_analyzer.get_wrong_and_correct_predictions_index()
     true_labels = mri_analyzer.get_labels()
     wrong_labels = true_labels[wrong_idxs]
@@ -419,8 +422,8 @@ if __name__ == "__main__":
             image_visualizer.plot_single_image(post_nac_colorized, "Pre-NAC global colored image")
     else:
         for slice_idx in idx_list:
-            # Test sul multibranch
-            original_image, colorized_images = mri_analyzer.get_original_and_colorized_slice(slice_idx= slice_idx) #ho due tensori da 8 immagini ciascuna
+
+            original_image, colorized_images = mri_analyzer.get_original_and_colorized_slice(slice_idx= slice_idx) 
             pre_nac, post_nac = image_visualizer.split_pre_and_post_NAC_for_visualize(original_image, ARCHITECTURE)
             colorized_pre_nac, colorized_post_nac = image_visualizer.split_pre_and_post_NAC_for_visualize(colorized_images, ARCHITECTURE)
             
@@ -453,8 +456,21 @@ if __name__ == "__main__":
 
         gradcam_viewer = GradCamViewer(mri_analyzer.model)
         if ARCHITECTURE=="multibranch":
-            for num,branch in zip([1,2,3,0],["T2", "DCEpeak", "DCE3TP", "DWI"]):
+            for num,branch in zip([0,1,2,3],["DWI","T2", "DCE_peak", "DCE_3TP"]):
                 # immagine_numpy = pre_nac[num].numpy()
                 # immagine_numpy = np.transpose(immagine_numpy, (0, 2,1) )
-                gradcam_viewer.show_gradcam(branch, tensor_for_input_predict, pre_nac[num].numpy(), mri_analyzer.predicted_classes[slice_idx] )
+                gradcam_viewer.show_gradcam(branch, tensor_for_input_predict, pre_nac[num].numpy(), mri_analyzer.predicted_classes[slice_idx] ) #prenac
+                gradcam_viewer.show_gradcam(branch, tensor_for_input_predict, post_nac[num].numpy(), mri_analyzer.predicted_classes[slice_idx] ) #postnac
+        else:
+            for num in [0,1,2,3,4]:    
+                #grad cam on original images (they all will have the activation on the same spot, since they are all overlapped)
+                gradcam_viewer.show_gradcam("monobranch", tensor_for_input_predict, pre_nac[num].numpy(), mri_analyzer.predicted_classes[slice_idx] )
+                gradcam_viewer.show_gradcam("monobranch", tensor_for_input_predict, post_nac[num].numpy(), mri_analyzer.predicted_classes[slice_idx] )
+
+            #grad cam on pre-nac colorized
+            pre_nac_colorized = (pre_nac_colorized - pre_nac_colorized.min() )/ (pre_nac_colorized.max()-pre_nac_colorized.min())
+            gradcam_viewer.show_gradcam("monobranch", tensor_for_input_predict, pre_nac_colorized.numpy(), mri_analyzer.predicted_classes[slice_idx] )
+            #grad cam on post-nac colorized
+            post_nac_colorized = (post_nac_colorized - post_nac_colorized.min() )/ (post_nac_colorized.max()-post_nac_colorized.min())
+            gradcam_viewer.show_gradcam("monobranch", tensor_for_input_predict, post_nac_colorized.numpy(), mri_analyzer.predicted_classes[slice_idx] )
                 

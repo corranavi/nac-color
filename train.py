@@ -35,7 +35,7 @@ if __name__ =="__main__":
         fold_start = datetime.now()
         lr_label = len(str(args.learning_rate).split('.')[1])
         wd_label = len(str(args.l2_reg).split('.')[1])
-        logger_wandb = WandbLogger(save_dir= f"wandb_logs_{i}" , name=f"{args.exp_name}_{args.architecture[:4]}_lr{lr_label}_wd{wd_label}_fold_{i+1}", project=args.wanb_project_name)
+        logger_wandb = WandbLogger(save_dir= f"wandb_logs_{i}" , name=f"{args.exp_name[:3]}_{args.architecture[:4]}_lr{lr_label}_wd{wd_label}_fold_{i+1}_seed{args.seed}", project=args.wanb_project_name)
         dm = MRIDataModule(fold[0], fold[1], slices=args.slices, batch_size=args.batch, preprocess=args.preprocess)
         
         print(f"CLASS WEIGHTS: {dm.class_weights}")
@@ -68,7 +68,7 @@ if __name__ =="__main__":
         
         #ckpt_best = cb_list[0].best_model_path
         trainer.test(model=litmodel, datamodule=dm) #, ckpt_path=ckpt_best)
-        final_model_path = os.path.join(f"./model_weights/{args.architecture}",f"Fold_{i+1}",f"trained_{args.architecture}_{args.exp_name}_lr{args.learning_rate}_wd{args.l2_reg}.ckpt")
+        final_model_path = os.path.join(f"./model_weights/{args.architecture}",f"Fold_{i+1}",f"trained_{args.architecture}_{args.exp_name}_lr{args.learning_rate}_wd{args.l2_reg}_seed{args.seed}.ckpt")
         
         trainer.save_checkpoint(final_model_path)
         wandb.finish()

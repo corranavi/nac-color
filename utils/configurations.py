@@ -2,6 +2,10 @@ import os
 import argparse
 
 MODEL_SETUP = {
+    "zero_level": {
+        "COLORIZE": False,
+        "FREEZE_BACKBONE": True
+    },
     "baseline":{
         "COLORIZE": False,
         "FREEZE_BACKBONE": False
@@ -18,7 +22,7 @@ MODEL_SETUP = {
 
 def parse_arguments():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter, description='Deep Learning on NAC Data')
-    parser.add_argument('--exp_name', type=str, default="colorization", help="Name of the experiment", choices=["baseline", "colorization","baseline_all", "colorization_all", "all"])
+    parser.add_argument('--exp_name', type=str, default="colorization", help="Name of the experiment", choices=["zero_level","baseline", "colorization", "all"])
 
     # Dataset parameters
     parser.add_argument('--input_path', type=str, default="dataset\\dataset_mini", required=False, help='Dataset input path')

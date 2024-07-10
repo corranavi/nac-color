@@ -136,7 +136,7 @@ def define_model(fold, args, class_weights, folder_time):
                             class_weights, folder_time, fold, preprocess=args.preprocess)
     else:
         # This is stage 2 of learning: fine tuning starting from checkpoint
-        ckpt_path = retrieve_ckpt_path_first_stage(args.architecture, args.preprocess, fold)
+        ckpt_path = retrieve_ckpt_path_first_stage(args.architecture, args.preprocess, fold, args.seed)
         print(f"Ckpt path: {ckpt_path}")
         try:
             naclitmodel = NACLitModel.load_from_checkpoint(ckpt_path, 
@@ -155,19 +155,24 @@ def define_model(fold, args, class_weights, folder_time):
 
     return naclitmodel
 
-def retrieve_ckpt_path_first_stage(architecture:str, preprocess:str, fold_num:int):
-    checkpoint_filepath=f"trained_{architecture}_colorization_FINAL.ckpt"
+def retrieve_ckpt_path_first_stage(architecture:str, preprocess:str, fold_num:int, seed:int):
+    checkpoint_filepath=f"trained_{architecture}_colorization_FINAL_seed{seed}.ckpt"
     dir_path = os.path.join(f"./model_weights/{architecture}",f"Fold_{fold_num+1}") +"/"
     ckpt_filepath = os.path.join(dir_path, checkpoint_filepath)
     return ckpt_filepath
 
 #def retrieve_ckpt_path_for_evaluate( architecture:str, exp:str, preprocess:str, fold_num:int):
     #checkpoint_filepath=f"trained_model_{exp}_FINAL.ckpt"
-def retrieve_ckpt_path_for_evaluate( args, fold_num:int):
-    lr_label = len(str(args.learning_rate).split('.')[1])
-    wd_label = len(str(args.l2_reg).split('.')[1])
-    checkpoint_filepath = f"ckpt_{args.exp_name}_LR{lr_label}_WD{wd_label}_epoch={args.epoch_for_ckpt}.ckpt"
-    dir_path = os.path.join(f"./CHECKPOINTS/{args.architecture}",f"Fold_{fold_num+1}") +"/"
+def retrieve_ckpt_path_for_evaluate( args, fold_num:int, full_trained:bool=True, ckpt_explicit_path:str=""):
+    # lr_label = len(str().split('.')[1])
+    # wd_label = len(str(args.l2_reg).split('.')[1])
+    if not full_trained:
+        checkpoint_filepath = f"ckpt_{args.exp_name}_LR{args.learning_rate}_WD{args.l2_reg}_epoch={args.epoch_for_ckpt-1}.ckpt"
+        dir_path = os.path.join(f"./CHECKPOINTS/{args.architecture}",f"Fold_{fold_num+1}") +"/"
+    else:
+        checkpoint_filepath=f"trained_{args.architecture}_{args.exp_name}_FINAL_seed{args.seed}.ckpt"
+        dir_path = os.path.join(f"./model_weights/{args.architecture}",f"Fold_{fold_num+1}") +"/"
+
     ckpt_filepath = os.path.join(dir_path, checkpoint_filepath)
     return ckpt_filepath
 
