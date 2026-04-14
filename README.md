@@ -1,19 +1,111 @@
-Code for Master Thesis in Data Science and Engineering @ Politecnico di Torino, July 2024.
+# Deep Learning Framework for Breast Cancer Response Assessment (Master Thesis)
 
-Disclaimer: This code runs on a private dataset (on sensitive data), therefore it is not possible to replicate it without the underlying dataset.
+This repository contains the code developed for my Master Thesis in Data Science and Engineering at Politecnico di Torino (July 2024). The Master Thesis, not included in this repo, is available for private sharing upon request.
 
-To run the code, the following script has to be used (general form):
-python train.py --epochs=$EPOCHS  --wanb_project_name=$wanb_project_name  --batch=$batchsize --folds=$FOLDS --input_path=$INPUT --class_weight=1 --exp_name=$exp_name --architecture=$architecture --learning_rate=$LR --l2_reg=$WD
+The project focuses on developing a deep learning framework to support clinicians in assessing **breast cancer regression after Neoadjuvant Chemotherapy (NAC)** using pre- and post-treatment MRI scans.
 
-Note that the experiments have been based on a multi-stage learning setting, relying on the experiment name ('exp_name' parameter) and on the chosen architecture ('architecture' parameter).
-Feel free to contact me for further clarification.
+The proposed approach aims to improve classification performance under **extremely limited data availability** by leveraging **transfer learning** and carefully designed architectural strategies based on pre-trained CNNs (ResNet backbones).
 
-**Summary of code structure**
-- train.py : the main file for training the model
-- evaluate.py: used to evaluate the trained model on the test dataset
-- dataset_lib.py: file containing all the custom methods needed to ingest and prepare input data.
-- visualize_and_predicit: used to make prediction using one of the pre-trained models and perform some visualizations.
-- model.py: wrapper Lightning model with custom methods
-- architectures_monobranch.py and architectures_multibranch.py: ResNet-based architectures used in the experiments.
 
-utils: folder containing util files for supporting the several steps of the training.
+---
+
+## Problem Overview
+
+The objective is to classify treatment response from MRI scans by analyzing changes between pre- and post-NAC imaging. This setting is particularly challenging due to:
+
+- Limited labeled medical imaging data  
+- High variability in MRI acquisition  
+- Need for robust generalization in a clinical context  
+
+To address these challenges, the framework combines:
+- **Multi-branch deep learning architectures** to process complementary imaging inputs  
+- **Automated colorization modules** to enhance representational capacity and improve transfer learning from pre-trained models  
+- **Fine-tuning of ResNet-based architectures** on small datasets  
+
+---
+
+## Methodology
+
+The framework is built around a transfer learning strategy using pre-trained CNNs (ResNet variants), adapted through:
+
+- Multi-channel / multi-branch input design  
+- Architectural customization for medical imaging fusion  
+- Fine-tuning strategies tailored to small datasets  
+- Experiment tracking across multiple learning stages  
+
+The experimental setup is designed to systematically evaluate different architectural choices and learning configurations.
+
+---
+
+## Code Structure
+
+- `train.py`  
+  Main training pipeline, including model initialization, training loop, and experiment orchestration.
+
+- `evaluate.py`  
+  Evaluation script for testing trained models on held-out data.
+
+- `dataset_lib.py`  
+  Data loading, preprocessing, and dataset construction utilities for MRI inputs.
+
+- `visualize_and_predicit.py`  
+  Inference and visualization utilities for qualitative model assessment.
+
+- `model.py`  
+  PyTorch Lightning model wrapper implementing training logic and custom components.
+
+- `architectures_monobranch.py` / `architectures_multibranch.py`  
+  ResNet-based architectures for single- and multi-branch experimental settings.
+
+- `utils/`  
+  Utility modules supporting training, logging, and evaluation workflows.
+
+---
+
+## Data Privacy
+
+This project was developed on a **private and sensitive medical dataset**.  
+As a result, the code cannot be executed or fully reproduced without access to the original data.
+
+---
+
+## Execution
+
+Training can be launched using the following command (general prompt):
+
+```bash
+python train.py \
+  --epochs=$EPOCHS \
+  --wanb_project_name=$WANB_PROJECT_NAME \
+  --batch=$BATCH_SIZE \
+  --folds=$FOLDS \
+  --input_path=$INPUT \
+  --class_weight=1 \
+  --exp_name=$EXP_NAME \
+  --architecture=$ARCHITECTURE \
+  --learning_rate=$LR \
+  --l2_reg=$WD
+```
+
+
+### Notes:
+
+* Experiments are organized using `exp_name` (multi-stage learning protocol)
+* Model variants are selected via `architecture`
+* Training is tracked using Weights & Biases
+
+---
+
+## Key Contributions
+
+* Design of a **deep learning framework for medical image-based treatment assessment**
+* Integration of **transfer learning under strong data scarcity constraints**
+* Development of **multi-branch CNN architectures for multimodal MRI representation**
+* Introduction of **automated colorization to improve pre-trained model adaptability**
+* Systematic experimental evaluation of architectural and training strategies
+
+---
+
+## Objective
+
+The goal of this work is to explore how transfer learning and architectural design can be combined to build robust medical imaging models under limited data conditions, with the broader aim of supporting clinical decision-making in oncology.
