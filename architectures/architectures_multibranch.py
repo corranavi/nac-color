@@ -3,11 +3,10 @@ import os
 from torchvision import models
 import torch.nn as nn
 from torch.nn import functional as F
-
 from typing import Dict, OrderedDict
-
-#NEW
 import lightning.pytorch as pl
+
+from colorizers import ColorizationModule
 
 class NACColorizedMultimodel(pl.LightningModule):
     """
@@ -15,16 +14,18 @@ class NACColorizedMultimodel(pl.LightningModule):
     """
 
     def __init__(self, FC, dropout, backbone="ResNet50", colorize=False, colorization_option="unique", freeze_backbone = True, ckpt_filepath = ""):
-        super(NACColorizedMultimodel, self).__init__()
+        super().__init__()
         self.colorize = colorize
         self.colorization_option = colorization_option
-
+        
+        # Possibility to use a dedicated colorizer for each modality VS the same for all the branches
+        # The num of input channels is always 1 since we are working with grayscale images 
         if self.colorize and self.colorization_option=="multicolor":
-            self.colorizer_DWI = ColorizationModule(name="colorizer_DWI")
-            self.colorizer_T2 = ColorizationModule(name="colorizer_T2")
-            self.colorizer_DCEpeak = ColorizationModule(name="colorizer_DCE_peak")
+            self.colorizer_DWI = ColorizationModule(name="colorizer_DWI", num_input_channels=1)
+            self.colorizer_T2 = ColorizationModule(name="colorizer_T2", num_input_channels=1)
+            self.colorizer_DCEpeak = ColorizationModule(name="colorizer_DCE_peak", num_input_channels=1)
         elif self.colorize:
-            self.colorizer = ColorizationModule()
+            self.colorizer = ColorizationModule(num_input_channels=1)
         else:
             pass
 
@@ -123,7 +124,7 @@ class MultiParametricMRIModel(pl.LightningModule): #(nn.Module):
         """
         Each branch is a ResNet50, pre-trained on ImageNet. The head is substituted by a FC (4096,2).
         """
-        super(MultiParametricMRIModel, self).__init__()
+        super().__init__()
         self.name = "MultiparametricMRIModel"
         self.backbone = backbone
         self.freeze_backbone = freeze_backbone
@@ -231,132 +232,129 @@ class BranchModel(pl.LightningModule): #(nn.Module):
         
         return conc_features, probs
     
-# Colorizer ------------------------------------------------------------------------------------------
+# # Colorizer [MOVED TO DEDICATED FOLDER]------------------------------------------------------------------------------------------
 
-def bn_weight_init(m):
-    if isinstance(m, nn.BatchNorm2d):
-        m.weight.data.fill_(1)
-        m.bias.data.zero_()
+# def bn_weight_init(m):
+#     if isinstance(m, nn.BatchNorm2d):
+#         m.weight.data.fill_(1)
+#         m.bias.data.zero_()
 
 
-def _make_res_layers(nl, ni, kernel=3, stride=1, padding=1):
-    layers = []
-    for i in range(nl):
-        layers.append(ResBlock(ni, kernel=kernel, stride=stride, padding=padding))
+# def _make_res_layers(nl, ni, kernel=3, stride=1, padding=1):
+#     layers = []
+#     for i in range(nl):
+#         layers.append(ResBlock(ni, kernel=kernel, stride=stride, padding=padding))
 
-    return nn.Sequential(*layers)
+#     return nn.Sequential(*layers)
 
-def conv_layer(in_layer, out_layer, kernel=3, stride=1, padding=1, instanceNorm=False):
-    """ Per costruire i conv layer di pixel shuffle """
-    return nn.Sequential(
-        nn.Conv2d(in_layer, out_layer, kernel_size=kernel, stride=stride, padding=padding),
-        nn.BatchNorm2d(out_layer) if not instanceNorm else nn.InstanceNorm2d(out_layer),
-        nn.LeakyReLU(inplace=True)
-    )
+# def conv_layer(in_layer, out_layer, kernel=3, stride=1, padding=1, instanceNorm=False):
+#     """Building block for PixelShuffle convolutional layers"""
+#     return nn.Sequential(
+#         nn.Conv2d(in_layer, out_layer, kernel_size=kernel, stride=stride, padding=padding),
+#         nn.BatchNorm2d(out_layer) if not instanceNorm else nn.InstanceNorm2d(out_layer),
+#         nn.LeakyReLU(inplace=True)
+#     )
 
-def icnr(x, scale=4, init=nn.init.kaiming_normal_):
-    """ ICNR init of `x`, with `scale` and `init` function.
+# def icnr(x, scale=4, init=nn.init.kaiming_normal_):
+#     """ ICNR init of `x`, with `scale` and `init` function.
 
-        Checkerboard artifact free sub-pixel convolution: https://arxiv.org/ftp/arxiv/papers/1707/1707.02937.pdf
-    """
-    ni, nf, h, w = x.shape
-    ni2 = int(ni / (scale ** 2))
-    k = init(torch.zeros([ni2, nf, h, w])).transpose(0, 1)
-    k = k.contiguous().view(ni2, nf, -1)
-    k = k.repeat(1, 1, scale ** 2)
-    k = k.contiguous().view([nf, ni, h, w]).transpose(0, 1)
-    x.data.copy_(k)
+#         Checkerboard artifact free sub-pixel convolution: https://arxiv.org/ftp/arxiv/papers/1707/1707.02937.pdf
+#     """
+#     ni, nf, h, w = x.shape
+#     ni2 = int(ni / (scale ** 2))
+#     k = init(torch.zeros([ni2, nf, h, w])).transpose(0, 1)
+#     k = k.contiguous().view(ni2, nf, -1)
+#     k = k.repeat(1, 1, scale ** 2)
+#     k = k.contiguous().view([nf, ni, h, w]).transpose(0, 1)
+#     x.data.copy_(k)
 
-class ResBlock(nn.Module):
-    def __init__(self, ni, nf=None, kernel=3, stride=1, padding=1):
-        super().__init__()
-        if nf is None:
-            nf = ni
-        self.conv1 = conv_layer(ni, nf, kernel=kernel, stride=stride, padding=padding)
-        self.conv2 = conv_layer(nf, nf, kernel=kernel, stride=stride, padding=padding)
+# class ResBlock(nn.Module):
+#     def __init__(self, ni, nf=None, kernel=3, stride=1, padding=1):
+#         super().__init__()
+#         if nf is None:
+#             nf = ni
+#         self.conv1 = conv_layer(ni, nf, kernel=kernel, stride=stride, padding=padding)
+#         self.conv2 = conv_layer(nf, nf, kernel=kernel, stride=stride, padding=padding)
 
-    def forward(self, x):
-        return x + self.conv2(self.conv1(x))
+#     def forward(self, x):
+#         return x + self.conv2(self.conv1(x))
 
-class ColorizationModule(pl.LightningModule):
+
+# class ColorizationModule(pl.LightningModule):
     
-    def __init__(self, type=None, name="unique_colorizer"):
-        super(ColorizationModule, self).__init__()
-        self.colorization_name = name
+#     def __init__(self, name="unique_colorizer"):
+#         super(ColorizationModule, self).__init__()
+#         self.colorization_name = name
+#         self.model = PixelShuffle(scale=2)
 
-        # if type == "colorU":
-        #     self.model = ColorU()
-        # elif type == "deconv":
-        #     self.model = Deconv()
-        # elif type == "pixelshuffle":
-        self.model = PixelShuffle(scale=2)
-
-    def forward(self,x):
-        return self.model(x)
+#     def forward(self,x):
+#         return self.model(x)
     
-class BaseDECO(pl.LightningModule):
-    def __init__(self, out=224, init=None):
-        super().__init__()
-        self.out_s = out
-        self.init = init
+
+# class BaseDECO(pl.LightningModule):
+#     def __init__(self, out=224, init=None):
+#         super().__init__()
+#         self.out_s = out
+#         self.init = init
     
-    def init_weights(self):
-        if self.init == None:
-            pass
-        elif self.init == 1:
-            self.apply(bn_weight_init)
+#     def init_weights(self):
+#         if self.init == None:
+#             pass
+#         elif self.init == 1:
+#             self.apply(bn_weight_init)
 
-class PixelShuffle(BaseDECO):
-    """
-        Modello PixelShuffle, che è quello che lavora sulla risoluzione dei checkboard artifacts
-    """
 
-    def __init__(self, out=224, init=1, scale=4, lrelu=False):
-        super().__init__(out, init)
-        #self.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=2) TODO - modifica provata il 2706 (questa line è l'originale)
-        self.conv1 = nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1)
-        self.bn1 = nn.BatchNorm2d(64)
-        self.act1 = nn.LeakyReLU()
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.resblocks = _make_res_layers(8,64)
-        self.pixel_shuffle = PixelShuffle_ICNR(ni=64, nf=3, scale=scale, lrelu=lrelu)
-        self.init_weights()
+# class PixelShuffle(BaseDECO):
+#     """
+#         Custom implementation of PixelShuffle
+#     """
 
-    def forward(self, xb):
-        """
-        @:param xb : Tensor "x batch"
-          Batch of input images
+#     def __init__(self, out=224, init=1, scale=4, lrelu=False):
+#         super().__init__(out, init)
+#         self.conv1 = nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1)
+#         self.bn1 = nn.BatchNorm2d(64)
+#         self.act1 = nn.LeakyReLU()
+#         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+#         self.resblocks = _make_res_layers(8,64)
+#         self.pixel_shuffle = PixelShuffle_ICNR(ni=64, nf=3, scale=scale, lrelu=lrelu)
+#         self.init_weights()
 
-        @:return tensor
-          A batch of output images
-        """
-        _xb = self.maxpool(self.act1(self.bn1(self.conv1(xb))))
-        _xb = self.resblocks(_xb)
+#     def forward(self, xb):
+#         """
+#         @:param xb : Tensor "x batch"
+#           Batch of input images
 
-        return self.pixel_shuffle(_xb)
+#         @:return tensor
+#           A batch of output images
+#         """
+#         _xb = self.maxpool(self.act1(self.bn1(self.conv1(xb))))
+#         _xb = self.resblocks(_xb)
 
-class PixelShuffle_ICNR(pl.LightningModule):
-    """ Upsample by `scale` from `ni` filters to `nf` (default `ni`), using `nn.PixelShuffle`, `icnr` init,
-        and `weight_norm`.
+#         return self.pixel_shuffle(_xb)
 
-        "Super-Resolution using Convolutional Neural Networks without Any Checkerboard Artifacts":
-        https://arxiv.org/abs/1806.02658
-    """
 
-    def __init__(self, ni: int, nf: int = None, scale: int = 4, icnr_init=True, blur_k=2, blur_s=1,
-                 blur_pad=(1, 0, 1, 0), lrelu=True):
-        super().__init__()
-        nf = ni if nf is None else nf
-        self.conv = conv_layer(ni, nf * (scale ** 2), kernel=1, padding=0, stride=1) if lrelu else nn.Sequential(
-            nn.Conv2d(64, 3 * (scale ** 2), 1, 1, 0), nn.BatchNorm2d(3 * (scale ** 2)))
-        if icnr_init:
-            icnr(self.conv[0].weight, scale=scale)
-        self.act = nn.LeakyReLU(inplace=False) if lrelu else nn.Hardtanh(-10000, 10000)
-        self.shuf = nn.PixelShuffle(scale)
-        # Blurring over (h*w) kernel
-        self.pad = nn.ReplicationPad2d(blur_pad)
-        self.blur = nn.AvgPool2d(blur_k, stride=blur_s)
+# class PixelShuffle_ICNR(pl.LightningModule):
+#     """ Upsample by `scale` from `ni` filters to `nf` (default `ni`), using `nn.PixelShuffle`, `icnr` init,
+#         and `weight_norm`.
 
-    def forward(self, x):
-        x = self.shuf(self.act(self.conv(x)))
-        return self.blur(self.pad(x))
+#         "Super-Resolution using Convolutional Neural Networks without Any Checkerboard Artifacts":
+#         https://arxiv.org/abs/1806.02658
+#     """
+
+#     def __init__(self, ni: int, nf: int = None, scale: int = 4, icnr_init=True, blur_k=2, blur_s=1,
+#                  blur_pad=(1, 0, 1, 0), lrelu=True):
+#         super().__init__()
+#         nf = ni if nf is None else nf
+#         self.conv = conv_layer(ni, nf * (scale ** 2), kernel=1, padding=0, stride=1) if lrelu else nn.Sequential(
+#             nn.Conv2d(64, 3 * (scale ** 2), 1, 1, 0), nn.BatchNorm2d(3 * (scale ** 2)))
+#         if icnr_init:
+#             icnr(self.conv[0].weight, scale=scale)
+#         self.act = nn.LeakyReLU(inplace=False) if lrelu else nn.Hardtanh(-10000, 10000)
+#         self.shuf = nn.PixelShuffle(scale)
+#         # Blurring over (h*w) kernel
+#         self.pad = nn.ReplicationPad2d(blur_pad)
+#         self.blur = nn.AvgPool2d(blur_k, stride=blur_s)
+
+#     def forward(self, x):
+#         x = self.shuf(self.act(self.conv(x)))
+#         return self.blur(self.pad(x))
