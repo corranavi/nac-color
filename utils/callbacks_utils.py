@@ -1,9 +1,12 @@
-from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
+from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+import os
+from datetime import datetime
 
-checkpoint_filepath=""
-
-def get_callbacks(checkpoint: bool = True, earlystop: bool = True, lr_monitor: bool = True) -> list:
+def get_callbacks(checkpoint: bool = True, 
+                  earlystop: bool = True, 
+                  lr_monitor: bool = True, 
+                  fold_num: int = 1, args = None):
     """
     Returns the list of the callbacks for the Lightning trainer.
 
@@ -11,26 +14,37 @@ def get_callbacks(checkpoint: bool = True, earlystop: bool = True, lr_monitor: b
         checkpoint (bool): whether to use a checkpoint cb. Defaults to True.
         earlystop (bool): whether to use an early stopping cb. Defaults to True.
         lr_monitor (bool): whether to use a lr monitoring cb. Defaults to True.
+
+        fold_num, exp_name and preprocess are only used for the checkpoint savepath.
     Returns:
         list[lightningtorch.Callbacks]: the list with the chosen callbacks.
     """
     cb_list = []
     
+    checkpoint_filepath=f"ckpt_{args.exp_name}_LR{args.learning_rate}_WD{args.l2_reg}"
+    dir_path = os.path.join(f"./CHECKPOINTS/{args.architecture}",f"Fold_{fold_num}") +"/"
+
     if checkpoint:
         checkpoint_cb = ModelCheckpoint(
-            filename = checkpoint_filepath,
-            monitor='val_loss',
-            save_weights_only=True,
-            save_top_k=1, #sarà come save_best_only?
-            verbose=True
+
+            dirpath=dir_path,
+            filename = checkpoint_filepath+"_{epoch}",
+            every_n_epochs=5,
+            save_on_train_epoch_end=False,
+            save_weights_only=False,
+            verbose=True,
+            save_top_k=-1,
+            monitor='monitoring_step',
+            mode="max"
         )
         cb_list.append(checkpoint_cb)
 
     if earlystop:
         earlystop_cb = EarlyStopping(
             monitor="val_loss",
+            mode="min",
             patience=10,
-            #restore_best_weights=True, -> da trovare l'equivalente di questo
+            min_delta=0.000025,
             verbose=True
         )
         cb_list.append(earlystop_cb)
@@ -41,6 +55,7 @@ def get_callbacks(checkpoint: bool = True, earlystop: bool = True, lr_monitor: b
         )
         cb_list.append(learningrate_cb)
 
+    print(cb_list)
     return cb_list
 
 def get_LR_scheduler(optimizer):
@@ -53,6 +68,7 @@ def get_LR_scheduler(optimizer):
     """
     lr_scheduler = ReduceLROnPlateau(
         optimizer=optimizer,
+        mode = "min",
         factor=0.5,
         patience=5,
         threshold=0.000025,

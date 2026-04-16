@@ -45,20 +45,26 @@ The experimental setup is designed to systematically evaluate different architec
 - `evaluate.py`  
   Evaluation script for testing trained models on held-out data.
 
-- `dataset_lib.py`  
-  Data loading, preprocessing, and dataset construction utilities for MRI inputs.
-
 - `visualize_and_predicit.py`  
   Inference and visualization utilities for qualitative model assessment.
 
 - `model.py`  
   PyTorch Lightning model wrapper implementing training logic and custom components.
 
-- `architectures_monobranch.py` / `architectures_multibranch.py`  
-  ResNet-based architectures for single- and multi-branch experimental settings.
+- `data/`  
+  Folder containing module for data loading, preprocessing, and dataset construction utilities for MRI inputs.
+
+- `labels/`  
+  Folder containing static files used for mapping labels to images.
 
 - `utils/`  
   Utility modules supporting training, logging, and evaluation workflows.
+
+- `debugging/`  
+  Utility modules sto visualize images to assist debugging
+
+- `architectures/`  
+  Module containing ResNet-based architectures for single- and multi-branch experimental settings.
 
 ---
 
