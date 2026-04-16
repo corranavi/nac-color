@@ -9,15 +9,14 @@ from datetime import datetime
 from .configurations import get_model_setup
 from model import NACLitModel
 
+
+# Split of the 37 patients between train and test for the CV had been previously
+# determined to keep a balanced distribution across folds
 Kfold_val = [[10, 13, 18, 22, 28, 31, 32, 37, 4], #5, 29 missing - 31 double
               [1, 12, 14, 16, 19, 26, 33, 35, 9],
               [15, 17, 2, 20, 24, 27, 3, 30, 7],
               [11, 21, 23, 25, 31, 34, 36, 6, 8]]
 
-# Kfold_val = [[10, 2, 11],   #solo per debugging
-#              [3,11],
-#              [2],
-#              [1]]
 
 def retrieve_folders_list(root_dir:str) -> "list[str]":
         """
@@ -50,7 +49,6 @@ def Kfold_split(folders, k):
     Kfold_list = []
 
     for sequence in folders:
-        patient_flag = False
         dicom_files = []
 
         for r, d, f in os.walk(sequence):
@@ -73,7 +71,6 @@ def Kfold_split(folders, k):
             patient_sequences.append(sequence)
         else:
             old_patient = name_num
-            patient_flag = True
             patient_sequences= []
             patient_list.append(patient_sequences)
             patient_sequences.append(sequence)
@@ -121,10 +118,16 @@ def Kfold_split(folders, k):
 
     return Kfold_list
 
-def define_model(fold, args, class_weights, folder_time):
+def define_model(fold: int, args: dict, class_weights: bool, folder_time: str) -> NACLitModel:
     """
     Depending on the configurations of the experiments, returns an appropriate LightningModule object
     for the trainer.
+    
+    Args:
+        fold (int): the number of the folds for CV
+        args (dict): dictionary with the configurations of the experiment
+        class_weights (bool): whether to use or not class imbalance
+        folder_time (str): a string to identify the experiment and the time of execution
     """
     colorize, freeze_backbone = get_model_setup(args.exp_name)
 
@@ -161,11 +164,8 @@ def retrieve_ckpt_path_first_stage(architecture:str, preprocess:str, fold_num:in
     ckpt_filepath = os.path.join(dir_path, checkpoint_filepath)
     return ckpt_filepath
 
-#def retrieve_ckpt_path_for_evaluate( architecture:str, exp:str, preprocess:str, fold_num:int):
-    #checkpoint_filepath=f"trained_model_{exp}_FINAL.ckpt"
+
 def retrieve_ckpt_path_for_evaluate( args, fold_num:int, full_trained:bool=True, ckpt_explicit_path:str=""):
-    # lr_label = len(str().split('.')[1])
-    # wd_label = len(str(args.l2_reg).split('.')[1])
     if not full_trained:
         checkpoint_filepath = f"ckpt_{args.exp_name}_LR{args.learning_rate}_WD{args.l2_reg}_epoch={args.epoch_for_ckpt-1}.ckpt"
         dir_path = os.path.join(f"./CHECKPOINTS/{args.architecture}",f"Fold_{fold_num+1}") +"/"
@@ -176,15 +176,13 @@ def retrieve_ckpt_path_for_evaluate( args, fold_num:int, full_trained:bool=True,
     ckpt_filepath = os.path.join(dir_path, checkpoint_filepath)
     return ckpt_filepath
 
+
 def print_results(roc_slice, roc_patient):
-    print("Print dei results")
     
     log_list = ['auc', 'accuracy', 'sensitivity', 'specificity', 'f1_score']
-    for key in roc_slice[0].keys():   #roc_slice è una lista di dizionari, con metriche calcolate a livello SLICE
+    for key in roc_slice[0].keys():   
         
-        
-
-        #------------------------------------------------------------------------------------- metriche livello paziente
+        #------------------------------------------------------PATIENT-WISE METRICS
         std_array_patient = []
         if key == 'pCR':
             for d in roc_patient:
@@ -192,15 +190,13 @@ def print_results(roc_slice, roc_patient):
         mean_value = sum(d[key] for d in roc_patient) / len(roc_patient)
         std_value = np.std(std_array_patient)
         for i, log in enumerate(log_list):
-            if log == 'auc' and key == 'pCR':
-                #Faceva plot speciale su neptune
-                pass
             str_value = '{0}_patient-level {1} mean = {2}'.format(log, key, mean_value[i])
             print(str_value)
             if log == 'auc' and key == 'pCR':
                 str_std_value = '{0}_patient-level {1} std = {2}'.format(log, key, std_value)
                 print(str_std_value)
-        #-------------------------------------------------------------------------------------- metriche livello slice
+        
+        #------------------------------------------------------SLICE-WISE METRICS
         std_array_slice = []
         if key == 'pCR':
             for d in roc_slice:
@@ -208,18 +204,20 @@ def print_results(roc_slice, roc_patient):
         mean_value = sum(d[key] for d in roc_slice) / len(roc_slice)
         std_value = np.std(std_array_slice)
         for i, log in enumerate(log_list):
-            if log == 'auc' and key == 'pCR':
-                #BOHFaceva plot speciale su neptune
-                pass
             str_value = '{0}_slice-level {1} mean = {2}'.format(log, key, mean_value[i])
             print(str_value)
             if log == 'auc' and key == 'pCR':
                 str_std_value = '{0}_slice-level {1} std = {2}'.format(log, key, std_value)
                 print(str_std_value)
-    print("Fine dell' esperimento.")
+
+    print("End of experiment")
+
 
 def export_result_as_df(slice_dictionaries, patient_dictionaries, args):
-    
+    """
+    Method to support results and hyperparameter tracking of the experiments through the creation of 
+    an excel file.
+    """
     lists_of_dictionaries = [slice_dictionaries, patient_dictionaries]
     levels = ["SLICE", "PATIENT"]
     branches_list = list(slice_dictionaries[0].keys()) #["pCR", "DWI_probs", "T2_probs", "DCEpeak_probs", "DCE3TP_probs"]
@@ -297,6 +295,6 @@ def export_result_as_df(slice_dictionaries, patient_dictionaries, args):
     with pd.ExcelWriter(output_file_name) as writer:
         df1.to_excel(writer, sheet_name=f'{levels[0]}_level')
         df2.to_excel(writer, sheet_name=f'{levels[1]}_level')
-        df3.to_excel(writer, sheet_name=f'Iperparametri')
+        df3.to_excel(writer, sheet_name=f'Hyperparameters')
 
     return output_file_name

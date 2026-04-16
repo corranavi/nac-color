@@ -6,7 +6,7 @@ import os
 import torchvision
 from torchvision.transforms import ToPILImage
 from torchvision.transforms import v2 as T
-from dataset_lib import MRIDataset
+from data.dataset_lib import MRIDataset
 from utils.train_utils import retrieve_folders_list, Kfold_split
 from utils.dataset_utils import get_val_transformations
 import matplotlib.pyplot as plt

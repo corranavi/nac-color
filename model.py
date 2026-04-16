@@ -10,12 +10,13 @@ import logging
 import wandb
 
 # from architectures_fase2 import NACColorizedMultimodel, MultiParametricMRIModel
-from architectures_monobranch import NACColorizedMONOmodel
-from architectures_multibranch import NACColorizedMultimodel
+from architectures.architectures_monobranch import NACColorizedMONOmodel
+from architectures.architectures_multibranch import NACColorizedMultimodel
 from utils.computation_utils import compute_loss,compute_loss_MONO, get_patient_level, test_predict
 from utils.callbacks_utils import get_LR_scheduler
 
 class NACLitModel(pl.LightningModule):
+    '''Lightning Module for the NAC architectures'''
 
     def __init__(self, num_slices = 3, fc_dimension = 128, dropout = 0.5, architecture="multibranch", exp_name="evaluation", colorize=True, colorization_option="", freeze_backbone=False, backbone="ResNet50", optim = "sgd", lr =0.0001, wd=0.001, class_weights=None, folder_time='', fold_num=1, preprocess="", gradcam=False):
         super().__init__()
@@ -99,14 +100,18 @@ class NACLitModel(pl.LightningModule):
         if not train:
             print(logits)
         
+        # The first image of the batch #1 is logged for experimental analysis (both the colorized
+        # and original image)
         if batch_idx == 1:
-            colorized_x = colorized_x.permute(dims=(1,0,2,4,3))   #swapping H and W so that depicted images are "vertical"
-            #print(f"Per il batch numero 1, x_colorized ha shape: {colorized_x.shape}")
+
+            #swapping H and W so that depicted images are "vertical"
+            colorized_x = colorized_x.permute(dims=(1,0,2,4,3))   
             x = colorized_x[0]
             grid = torchvision.utils.make_grid(x.view(-1,3,224,224))
             self.logger.experiment.log({"Colorized Scans": [wandb.Image(grid, caption = "Colorized Scans")]})
 
-            images = images.permute(dims=(1,0,2,4,3))   #swapping H and W so that depicted images are "vertical"
+            #swapping H and W so that depicted images are "vertical"
+            images = images.permute(dims=(1,0,2,4,3))   
             print(f"Training step: le immagini caricate hanno shape {images.shape}")
             images = images[0]
             grid = torchvision.utils.make_grid(images.view(-1,3,224,224))
@@ -117,7 +122,6 @@ class NACLitModel(pl.LightningModule):
 
     # Stepwise computations
     def training_step(self, batch, batch_idx):
-        #x,_ = batch
         loss, logits, labels = self._common_step(batch, batch_idx, train=True)
         accuracy = self.binary_accuracy(logits["pCR"].argmax(axis=-1), labels.argmax(axis=-1))
         auroc = self.auroc(nn.Softmax(dim=1)(logits["pCR"])[:,1], labels[:,1])
@@ -155,7 +159,7 @@ class NACLitModel(pl.LightningModule):
         self.training_step_outputs = []  #clean the outputs list
 
     def on_validation_epoch_end(self) -> None:
-        # #clean the outputs --- only if batch size for validation == len(val_dataset), otherwise metrics computation occurs here
+        # clean the outputs --- only if batch size for validation == len(val_dataset), otherwise metrics computation occurs here
         self.validation_step_outputs = []
 
     def on_test_end(self):
@@ -171,20 +175,15 @@ class NACLitModel(pl.LightningModule):
                 if k not in total_probs:
                     total_probs[k] = torch.Tensor().to(self.device)
                 total_probs[k] = torch.concat((total_probs[k],probs_dict[k]))
-        
-        #Calcolo delle metriche con torchvision
-        auroc = self.auroc(nn.Softmax(dim=1)(total_probs["pCR"])[:,1], total_labels[:,1])
-        #print(f"AUC calcolata con torchmetrics: {auroc}")
 
-        # Calcolo delle metriche sulla singola fold
+        # Fold-wise metric computations
         for output_name, Y_prob in total_probs.items():
-            #print(output_name, " : ", Y_prob)
             roc_result_slice = test_predict(total_labels, Y_prob, "slice", output_name, self.folder_time, self.fold_num, self.num_slices)
             self.slice_dict_test[output_name] = roc_result_slice
             Y_val_split, Y_prob_split = get_patient_level(total_labels, Y_prob, self.num_slices)
             roc_result_patient = test_predict(Y_val_split, Y_prob_split, "patient", output_name, self.folder_time, self.fold_num, self.num_slices)
             self.patient_dict_test[output_name] = roc_result_patient
         
-        print("Dizionario con le probabilità a livello slice: ")
+        print("Slice-level test probabilities: ")
         print(self.slice_dict_test)
         self.test_step_outputs = []

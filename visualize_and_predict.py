@@ -6,7 +6,7 @@ import os
 import torchvision
 from torchvision.transforms import ToPILImage
 from torchvision.transforms import v2 as T
-from dataset_lib import MRIDataset
+from data.dataset_lib import MRIDataset
 from utils.train_utils import retrieve_folders_list, Kfold_split
 from utils.dataset_utils import get_val_transformations
 import matplotlib.pyplot as plt
@@ -206,9 +206,6 @@ class ImageVisualizer:
         Returns:
             None"""
         np_img = image_tensor.numpy()
-        # np_img_pil = np.transpose(np_img, (1, 2, 0))
-        # pil_image = Image.fromarray(np_img_pil)
-        # pil_image.show()
 
         plt.figure(figsize=(15, 15))  # Adjust the figsize as needed
         plt.imshow(np.transpose(np_img, (1, 2, 0)))  # Convert from (C, H, W) to (H, W, C)
@@ -299,6 +296,7 @@ class ImageVisualizer:
         plt.savefig(output_name, bbox_inches='tight', pad_inches=0)
         plt.close()
 
+
 class ModelWrapper(torch.nn.Module):
     """ This class is used only for GradCam, to retrieve the tensor of the predicted logits."""
     def __init__(self, model, output_key, has_dict=True):
@@ -314,6 +312,7 @@ class ModelWrapper(torch.nn.Module):
             return output
         return output[self.output_key]
     
+
 class GradCamViewer:
     """ Classe da implementare per GradCam - vedere se spostare su file dedicato che importi mrianalyzer e imageviz """
     def __init__(self, model):
@@ -390,10 +389,10 @@ if __name__ == "__main__":
     true_labels = mri_analyzer.get_labels()
     wrong_labels = true_labels[wrong_idxs]
     correct_labels = true_labels[correct_idxs]
-    print(f"Indici delle slice predette correttamente: {correct_idxs}")
-    print(f"Indici delle slice predette erroneamente: {wrong_idxs}")
-    print(f"Labels predette correttamente: {correct_labels}")
-    print(f"Labels non predette correttamente: {wrong_labels}")
+    print(f"Indexes of proper classified slices: {correct_idxs}")
+    print(f"Indexes of misclassified slices: {wrong_idxs}")
+    print(f"Good predicted labels: {correct_labels}")
+    print(f"Wrong predicted labels: {wrong_labels}")
 
     # --------------------------------------------------------------------------------------------------------
     # Print di una slice alla volta in loop  -----------------------------------------------------------------
@@ -401,13 +400,10 @@ if __name__ == "__main__":
     slice_idx, print_single_image_original, print_single_image_colorized = get_users_visualization_choices(ARCHITECTURE, max_index)
     idx_list = [slice_idx] #10 ok, interessante
 
-    # print(mri_analyzer.model.model.multiparametric.branchDWI)
-    # exit()
 
     if ARCHITECTURE=="monobranch":
         for slice_idx in idx_list:
-            original_image, colorized_images = mri_analyzer.get_original_and_colorized_slice(slice_idx= slice_idx) #la 10 ok
-            print(original_image.shape)
+            original_image, colorized_images = mri_analyzer.get_original_and_colorized_slice(slice_idx= slice_idx) 
             pre_nac, post_nac = image_visualizer.split_pre_and_post_NAC_for_visualize(original_image, ARCHITECTURE)
             pre_nac_colorized, post_nac_colorized = colorized_images[0], colorized_images[1]
 
@@ -457,8 +453,6 @@ if __name__ == "__main__":
         gradcam_viewer = GradCamViewer(mri_analyzer.model)
         if ARCHITECTURE=="multibranch":
             for num,branch in zip([0,1,2,3],["DWI","T2", "DCE_peak", "DCE_3TP"]):
-                # immagine_numpy = pre_nac[num].numpy()
-                # immagine_numpy = np.transpose(immagine_numpy, (0, 2,1) )
                 gradcam_viewer.show_gradcam(branch, tensor_for_input_predict, pre_nac[num].numpy(), mri_analyzer.predicted_classes[slice_idx] ) #prenac
                 gradcam_viewer.show_gradcam(branch, tensor_for_input_predict, post_nac[num].numpy(), mri_analyzer.predicted_classes[slice_idx] ) #postnac
         else:

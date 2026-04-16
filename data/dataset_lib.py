@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import v2 as T
 import lightning.pytorch as pl
 
-from utils.dataset_utils import get_transformations, get_val_transformations, normalize_slice_channelwise, normalize_slices
+from utils.dataset_utils import get_transformations, get_val_transformations, normalize_slices
 
 branches_list = ["DWI","T2","DCE_peak","DCE_3TP"]
 scans = ["DWI","T2","DCE"]
@@ -30,7 +30,7 @@ class MRIDataset(Dataset):
         print(f"Preprocess type : {self.preprocess_type}")
 
         print("1. DEFINING SUBSEQUENCES")
-        features, labels, scan_list, extra_slices_per_side, patient_list = self._define_subsequences(folders_list)
+        features, labels, scan_list, patient_list = self._define_subsequences(folders_list)
         
         print("\n2. DEFINING INPUTS")
         X,Y = self._define_input(patient_list, features, labels)
@@ -190,7 +190,6 @@ class MRIDataset(Dataset):
                     if img_instance >= index_instance and img_instance <= upper_bound:
                         image_count += 1
                         if scan_string != "DCE":   
-                            #float_slice = sitk.GetArrayFromImage(img)
                             slices.append(self.preprocess_img(img))
                         else:
                             slices.append(img)
@@ -198,7 +197,6 @@ class MRIDataset(Dataset):
                     if img_instance < index_instance and img_instance >= lower_bound:
                         image_count += 1
                         if scan_string != "DCE":
-                            #float_slice = sitk.GetArrayFromImage(img)
                             slices.append(self.preprocess_img(img))
                         else:
                             slices.append(img)
@@ -251,18 +249,18 @@ class MRIDataset(Dataset):
         labels = np.array(labels, dtype=int)
         #print(labels[:,0])
 
-        class_weights = compute_class_weight(class_weight='balanced',classes=np.unique(labels[:,0]),y=labels[:,0])  #le class weights vanno calcolate sull'intero training dataset
+        # Compute class weights on the full training dataset
+        class_weights = compute_class_weight(class_weight='balanced',classes=np.unique(labels[:,0]),y=labels[:,0])
         self.class_weights_tensor = torch.tensor(class_weights, dtype=torch.float32)
         print(f"Class weights: {self.class_weights_tensor}")
             
         
         labels = torch.from_numpy(labels).to(torch.float32) 
-        #print(f"Labels dtype: {labels.dtype}")
         print(f"Modalities: {modalities}")
         print(f"Scan list: {scan_list}")
         print(f"Extra slice considered: {extra_slices_per_side} - total subsequence lenght: {extra_slices_per_side*2+1}")
 
-        return features, labels, scan_list, extra_slices_per_side, paz_list           #scan_list = NAC_1, NAC_1,....per ogni foto
+        return features, labels, scan_list, extra_slices_per_side, paz_list           
 
     def _check_class_balance(self, labels_array: np.array):
         """
@@ -320,10 +318,8 @@ class MRIDataset(Dataset):
     def _define_DCE(self, T1_1, T1_2):
         new_patient = ""
         DCE_dict = {}
-        branches_list =self.branches_list 
 
         features = []
-        labels = []
 
         DCE_peak1, DCE_peak2, DCE_3TP1, DCE_3TP2 = ([] for i in range(4))
         sub_sequences = [DCE_peak1, DCE_peak2, DCE_3TP1, DCE_3TP2]
@@ -463,7 +459,7 @@ class MRIDataset(Dataset):
                       7: 'DCE_3TP pre-NAC'}
         X = torch.Tensor()
         for i,feature in enumerate(features): 
-            feature = np.transpose(feature, (0, 1, 3, 2))    # NB come nell'originale sono stati invertiti H e W --> original: X_sub = feature #np.transpose(feature, (0, 3, 2, 1)) 
+            feature = np.transpose(feature, (0, 1, 3, 2))  
             X_sub = torch.Tensor(feature)
             if X_sub.any():
                 if X_sub.shape[1] == 1:
@@ -498,11 +494,6 @@ class MRIDataModule(pl.LightningDataModule):
         self.validation_dataset = MRIDataset(validation_folders, slices, transform = self.val_transformations, preprocess_type=self.preprocess)
         self.test_dataset = self.validation_dataset
 
-    # def setup(self, stage):
-    #     self.train_dataset = MRIDataset(self.training_folders, self.slices, transform = self.transformations)
-    #     self.class_weights = self.train_dataset.class_weights_tensor    #class weight is computed only over the training dataset, and is used in the computation of the training loss ONLY
-    #     self.validation_dataset = MRIDataset(self.validation_folders, self.slices)
-    #     self.test_dataset = self.validation_dataset
 
     def train_dataloader(self):
         return DataLoader(
